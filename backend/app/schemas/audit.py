@@ -20,6 +20,14 @@ class AuditEventType(StrEnum):
     ACTION_SUPERSEDED = "action_superseded"
     ACTION_EXPIRED = "action_expired"
     AGENT_RUN_COMPLETED = "agent_run_completed"
+    ACTION_APPROVED = "action_approved"
+    ACTION_REJECTED = "action_rejected"
+    EXECUTION_STARTED = "execution_started"
+    EXECUTION_BLOCKED = "execution_blocked"
+    EXECUTION_SUCCEEDED = "execution_succeeded"
+    EXECUTION_FAILED = "execution_failed"
+    EXECUTION_OUTCOME_UNKNOWN = "execution_outcome_unknown"
+    VERIFICATION_COMPLETED = "verification_completed"
 
 
 class AuditEventResponse(BaseModel):
