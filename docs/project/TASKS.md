@@ -13,9 +13,9 @@ Statuses: BACKLOG | READY | IN_PROGRESS | BLOCKED | IN_REVIEW | DONE
 | ID    | Task                                         | Priority | Status  |
 |-------|----------------------------------------------|----------|---------|
 | T-004 | PayPal OAuth access token                    | P0       | DONE   |
-| T-005 | List invoices                                | P0       | READY |
+| T-005 | List invoices                                | P0       | DONE |
 | T-006 | Get invoice details                          | P0       | BACKLOG |
-| T-007 | Create draft + send invoice (needs approval) | P0       | BACKLOG |
+| T-007 | Create draft + send invoice (needs approval) | P0       | READY |
 
 ## Milestone 3 — Backend Foundation
 | ID    | Task                                        | Priority | Status  |
