@@ -13,7 +13,7 @@ Live mode is blocked in configuration (`paypal_environment: Literal["sandbox"]`)
 | Operation        | Method + Path                                | Scope (per docs)                  | Status      |
 |------------------|----------------------------------------------|-----------------------------------|-------------|
 | Get access token | POST /v1/oauth2/token (client_credentials)   | —                                 | TESTED |
-| List invoices    | GET /v2/invoicing/invoices                   | invoicing/invoices/read           | DOCUMENTED  |
+| List invoices    | GET /v2/invoicing/invoices                   | invoicing/invoices/read           | TESTED  |
 | Show invoice     | GET /v2/invoicing/invoices/{invoice_id}      | invoicing/invoices/read           | DOCUMENTED  |
 | Create draft     | POST /v2/invoicing/invoices                  | invoicing/invoices/readwrite      | DOCUMENTED  |
 | Send invoice     | POST /v2/invoicing/invoices/{invoice_id}/send| invoicing/invoices/readwrite      | DOCUMENTED  |
@@ -35,3 +35,14 @@ List invoices query params (per docs): `page` (default 1), `page_size` (1–100,
 | Date       | Operation        | Result                                                   |
 |------------|------------------|----------------------------------------------------------|
 | 2026-11-04 | Get access token | Success via GET /api/integrations/paypal/status (connected=true) |
+| 2026-11-04 | List invoices    | 403 NOT_AUTHORIZED with an app linked to a Saudi Arabia sandbox business account |
+| 2026-11-04 | List invoices    | Success via GET /api/invoices with a US sandbox business account (0 invoices) |
+
+## Known Limitations
+- An app linked to a **Saudi Arabia** sandbox business account was not granted the
+  `https://uri.paypal.com/services/invoicing` scope, and invoice calls returned
+  `403 NOT_AUTHORIZED`. An app linked to a **United States** sandbox business account
+  received the scope and worked. Invoicing availability appears to depend on the
+  account country (observed behavior, not confirmed in official docs).
+- To diagnose granted scopes without exposing the token, run from `backend/`:
+  `python scripts/check_paypal_scopes.py`
