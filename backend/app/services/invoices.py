@@ -1,8 +1,11 @@
 """Invoice service: maps PayPal data to CollectIQ's invoice models."""
 
-from app.integrations.paypal.invoices import PayPalInvoicesAPI
+from app.integrations.paypal.invoices import MAX_PAGE_SIZE, PayPalInvoicesAPI
 from app.integrations.paypal.schemas import PayPalBillingInfo, PayPalInvoice
 from app.schemas.invoices import InvoiceListResponse, InvoiceSummary
+
+# Safety bound for full scans: 10 pages x 100 invoices.
+MAX_SCAN_PAGES = 10
 
 
 def _recipient_name(billing: PayPalBillingInfo | None) -> str | None:
@@ -48,6 +51,10 @@ class InvoiceService:
     def __init__(self, invoices_api: PayPalInvoicesAPI) -> None:
         self._api = invoices_api
 
+    @property
+    def environment(self) -> str:
+        return self._api.environment
+
     async def list_invoices(self, page: int, page_size: int) -> InvoiceListResponse:
         result = await self._api.list_invoices(page=page, page_size=page_size)
         return InvoiceListResponse(
@@ -58,3 +65,15 @@ class InvoiceService:
             total_pages=result.total_pages,
             source=f"paypal_{self._api.environment}",
         )
+
+    async def list_all_invoices(self, max_pages: int = MAX_SCAN_PAGES) -> list[InvoiceSummary]:
+        """Fetch every invoice page (bounded by max_pages) for analysis."""
+        invoices: list[InvoiceSummary] = []
+        page = 1
+        while page <= max_pages:
+            result = await self._api.list_invoices(page=page, page_size=MAX_PAGE_SIZE)
+            invoices.extend(to_invoice_summary(invoice) for invoice in result.items)
+            if not result.items or result.total_pages is None or page >= result.total_pages:
+                break
+            page += 1
+        return invoices

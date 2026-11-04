@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "development"
     frontend_origin: str = "http://localhost:5173"
 
+    # Timezone that defines "today" for due-date calculations.
+    # The Sandbox merchant account is US-based.
+    business_timezone: str = "America/Los_Angeles"
+
     # Database
     database_url: str = "sqlite:///./collectiq.db"
 

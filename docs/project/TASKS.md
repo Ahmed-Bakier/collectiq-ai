@@ -21,7 +21,7 @@ Statuses: BACKLOG | READY | IN_PROGRESS | BLOCKED | IN_REVIEW | DONE
 | ID    | Task                                        | Priority | Status  |
 |-------|---------------------------------------------|----------|---------|
 | T-008 | Database models + migrations                | P0       | BACKLOG |
-| T-009 | Invoice analysis service (overdue/priority) | P0       | BACKLOG |
+| T-009 | Invoice analysis service (overdue/priority) | P0       | DONE |
 | T-010 | Approval engine + audit log                 | P0       | BACKLOG |
 
 ## Milestone 4 — AI Agent
