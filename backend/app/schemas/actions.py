@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ApprovalStatus(StrEnum):
@@ -57,3 +57,13 @@ class ActionResponse(BaseModel):
 
 class ActionListResponse(BaseModel):
     items: list[ActionResponse]
+
+
+class ApproveActionRequest(BaseModel):
+    """The user confirms the exact parameter version they reviewed."""
+
+    parameters_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RejectActionRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)

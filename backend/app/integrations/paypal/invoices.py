@@ -35,6 +35,21 @@ def _extract_invoice_id(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def _notification_body(
+    *,
+    send_to_recipient: bool,
+    send_to_invoicer: bool,
+    subject: str | None,
+    note: str | None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"send_to_recipient": send_to_recipient, "send_to_invoicer": send_to_invoicer}
+    if subject:
+        body["subject"] = subject
+    if note:
+        body["note"] = note
+    return body
+
+
 class PayPalInvoicesAPI:
     """Typed wrapper around the PayPal invoice endpoints."""
 
@@ -60,7 +75,7 @@ class PayPalInvoicesAPI:
             raise PayPalAPIError(200, "Unexpected invoice list format from PayPal.") from exc
 
     async def get_invoice(self, invoice_id: str) -> PayPalInvoice:
-        """Read a single invoice. Used to verify the result of write operations."""
+        """Read a single invoice. Used before and after write operations."""
         payload = await self._client.get(f"{INVOICES_PATH}/{validate_invoice_id(invoice_id)}")
         try:
             return PayPalInvoice.model_validate(payload)
@@ -82,10 +97,39 @@ class PayPalInvoicesAPI:
         *,
         send_to_recipient: bool = True,
         send_to_invoicer: bool = False,
+        subject: str | None = None,
+        note: str | None = None,
     ) -> None:
         """Send a draft invoice to its recipient. External write operation."""
         await self._client.post(
             f"{INVOICES_PATH}/{validate_invoice_id(invoice_id)}/send",
-            {"send_to_recipient": send_to_recipient, "send_to_invoicer": send_to_invoicer},
+            _notification_body(
+                send_to_recipient=send_to_recipient,
+                send_to_invoicer=send_to_invoicer,
+                subject=subject,
+                note=note,
+            ),
+            request_id,
+        )
+
+    async def remind_invoice(
+        self,
+        invoice_id: str,
+        request_id: str,
+        *,
+        subject: str | None = None,
+        note: str | None = None,
+        send_to_recipient: bool = True,
+        send_to_invoicer: bool = False,
+    ) -> None:
+        """Send a payment reminder for a sent invoice (PayPal allows 2 per day). External write."""
+        await self._client.post(
+            f"{INVOICES_PATH}/{validate_invoice_id(invoice_id)}/remind",
+            _notification_body(
+                send_to_recipient=send_to_recipient,
+                send_to_invoicer=send_to_invoicer,
+                subject=subject,
+                note=note,
+            ),
             request_id,
         )

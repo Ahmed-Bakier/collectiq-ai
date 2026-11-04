@@ -17,6 +17,7 @@ Live mode is blocked in configuration (`paypal_environment: Literal["sandbox"]`)
 | Show invoice     | GET /v2/invoicing/invoices/{invoice_id}      | invoicing/invoices/read           | TESTED  |
 | Create draft     | POST /v2/invoicing/invoices                  | invoicing/invoices/readwrite      | TESTED  |
 | Send invoice     | POST /v2/invoicing/invoices/{invoice_id}/send| invoicing/invoices/readwrite      | TESTED  |
+| Send reminder    | POST /v2/invoicing/invoices/{invoice_id}/remind | invoicing/invoices/readwrite | IMPLEMENTED |
 
 List invoices query params (per docs): `page` (default 1), `page_size` (1–100, default 20),
 `total_required`, `fields`.
@@ -63,3 +64,8 @@ Observations:
 - The list response includes `payment_term.due_date` but not `term_type`.
 - PayPal docs require invoice/due dates of today or later, so overdue demo data
   is produced by short due dates that age naturally.
+
+## Approval Flow Live Test (2026-11-04)
+Agent proposal e2ab4f64-c348-432b-a04b-5e58e7780fe0 (send_invoice, Pixel & Co, 300 USD)
+-> approved with parameters hash 4fad54eb... -> executed with PayPal-Request-Id = action ID
+-> verification read: DRAFT -> SENT (verified). Full audit trail recorded.
