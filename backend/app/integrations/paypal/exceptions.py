@@ -24,3 +24,11 @@ class PayPalAPIError(PayPalError):
         super().__init__(message)
         self.status_code = status_code
         self.debug_id = debug_id
+
+
+class PayPalWriteOutcomeUnknownError(PayPalConnectionError):
+    """Raised when a write request timed out or lost its connection after being sent.
+
+    PayPal may or may not have applied the operation. The result must be verified
+    by reading the resource, and the write must never be retried blindly.
+    """
