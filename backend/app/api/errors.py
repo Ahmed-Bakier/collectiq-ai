@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.agent.llm import LLMError, LLMNotConfiguredError, LLMRateLimitError
 from app.integrations.paypal.exceptions import (
     PayPalAPIError,
     PayPalAuthError,
@@ -48,5 +49,19 @@ async def handle_paypal_error(request: Request, exc: Exception) -> JSONResponse:
     return _error_response(502, "paypal_error", "Unexpected PayPal integration error.")
 
 
+async def handle_llm_error(request: Request, exc: Exception) -> JSONResponse:
+    """Map AI provider errors to safe HTTP responses."""
+    logger.warning("AI provider error on %s %s: %s", request.method, request.url.path, type(exc).__name__)
+
+    if isinstance(exc, LLMNotConfiguredError):
+        return _error_response(503, "ai_not_configured", "The AI provider is not configured on the server.")
+    if isinstance(exc, LLMRateLimitError):
+        return _error_response(
+            429, "ai_rate_limited", "The AI provider rate limit was reached. Please wait a minute and try again."
+        )
+    return _error_response(502, "ai_error", "The AI provider returned an error.")
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(PayPalError, handle_paypal_error)
+    app.add_exception_handler(LLMError, handle_llm_error)

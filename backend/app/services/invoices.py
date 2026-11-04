@@ -36,6 +36,7 @@ def to_invoice_summary(invoice: PayPalInvoice) -> InvoiceSummary:
         status=invoice.status,
         recipient_name=_recipient_name(billing),
         recipient_email=billing.email_address if billing else None,
+        recipient_business_name=billing.business_name if billing else None,
         currency_code=currency_code,
         total_amount=invoice.amount.value if invoice.amount else None,
         amount_due=invoice.due_amount.value if invoice.due_amount else None,

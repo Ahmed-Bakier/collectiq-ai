@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # Email of the Sandbox business account that issues demo invoices.
     paypal_sandbox_invoicer_email: str | None = None
 
+    # AI provider (any OpenAI-compatible Chat Completions API).
+    llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    llm_model: str = "gemini-3.6-flash"
+    llm_api_key: SecretStr = SecretStr("")
+    llm_reasoning_effort: str | None = None
+
     @property
     def paypal_credentials_configured(self) -> bool:
         """Return True when real (non-placeholder) PayPal credentials are present."""
@@ -52,6 +58,12 @@ class Settings(BaseSettings):
             and not client_id.startswith(PLACEHOLDER_PREFIX)
             and not client_secret.startswith(PLACEHOLDER_PREFIX)
         )
+
+    @property
+    def llm_configured(self) -> bool:
+        """Return True when a real (non-placeholder) LLM API key is present."""
+        key = self.llm_api_key.get_secret_value().strip()
+        return bool(key) and not key.startswith(PLACEHOLDER_PREFIX)
 
 
 @lru_cache

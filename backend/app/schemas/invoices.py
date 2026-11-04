@@ -13,6 +13,7 @@ class InvoiceSummary(BaseModel):
     invoice_number: str | None = None
     status: str
     recipient_name: str | None = None
+    recipient_business_name: str | None = None
     recipient_email: str | None = None
     currency_code: str | None = None
     total_amount: Decimal | None = None

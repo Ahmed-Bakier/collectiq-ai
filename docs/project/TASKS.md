@@ -27,8 +27,8 @@ Statuses: BACKLOG | READY | IN_PROGRESS | BLOCKED | IN_REVIEW | DONE
 ## Milestone 4 — AI Agent
 | ID    | Task                                        | Priority | Status  |
 |-------|---------------------------------------------|----------|---------|
-| T-011 | Choose AI provider + tool registry          | P0       | BACKLOG |
-| T-012 | Agent run with structured action plan       | P0       | BACKLOG |
+| T-011 | Choose AI provider + tool registry          | P0       | DONE |
+| T-012 | Agent run with structured action plan       | P0       | DONE |
 
 ## Milestone 5–7 — Frontend, QA, Deployment
 Tasks will be detailed when Milestone 4 is complete.

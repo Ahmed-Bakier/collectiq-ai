@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
-from app.api.routes import health, integrations, invoices
+from app.api.routes import agent, health, integrations, invoices
 from app.core.config import get_settings
 
 
@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(integrations.router, prefix="/api")
     app.include_router(invoices.router, prefix="/api")
+    app.include_router(agent.router, prefix="/api")
     return app
 
 
