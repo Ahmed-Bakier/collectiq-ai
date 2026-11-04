@@ -4,3 +4,5 @@ pydantic-settings>=2.4
 httpx>=0.27
 pytest>=8.0
 openai>=1.60
+sqlalchemy[asyncio]>=2.0
+aiosqlite>=0.20
