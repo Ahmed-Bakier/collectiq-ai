@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     paypal_client_id: str = ""
     paypal_client_secret: SecretStr = SecretStr("")
 
+    # Email of the Sandbox business account that issues demo invoices.
+    paypal_sandbox_invoicer_email: str | None = None
+
     @property
     def paypal_credentials_configured(self) -> bool:
         """Return True when real (non-placeholder) PayPal credentials are present."""
