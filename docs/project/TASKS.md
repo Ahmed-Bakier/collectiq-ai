@@ -20,9 +20,9 @@ Statuses: BACKLOG | READY | IN_PROGRESS | BLOCKED | IN_REVIEW | DONE
 ## Milestone 3 — Backend Foundation
 | ID    | Task                                        | Priority | Status  |
 |-------|---------------------------------------------|----------|---------|
-| T-008 | Database models + migrations                | P0       | BACKLOG |
+| T-008 | Database models + migrations                | P0       | DONE |
 | T-009 | Invoice analysis service (overdue/priority) | P0       | DONE |
-| T-010 | Approval engine + audit log                 | P0       | BACKLOG |
+| T-010 | Approval engine + audit log                 | P0       | IN_PROGRESS |
 
 ## Milestone 4 — AI Agent
 | ID    | Task                                        | Priority | Status  |

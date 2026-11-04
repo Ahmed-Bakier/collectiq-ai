@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.agent.llm import LLMError, LLMNotConfiguredError, LLMRateLimitError
+from app.core.exceptions import AppError
 from app.integrations.paypal.exceptions import (
     PayPalAPIError,
     PayPalAuthError,
@@ -27,6 +28,11 @@ def _error_response(
         status_code=status_code,
         content={"error": {"code": code, "message": message, "paypal_debug_id": paypal_debug_id}},
     )
+
+
+async def handle_app_error(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, AppError)
+    return _error_response(exc.status_code, exc.code, exc.message)
 
 
 async def handle_paypal_error(request: Request, exc: Exception) -> JSONResponse:
@@ -63,5 +69,6 @@ async def handle_llm_error(request: Request, exc: Exception) -> JSONResponse:
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    app.add_exception_handler(AppError, handle_app_error)
     app.add_exception_handler(PayPalError, handle_paypal_error)
     app.add_exception_handler(LLMError, handle_llm_error)
