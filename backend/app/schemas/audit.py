@@ -18,6 +18,7 @@ class AuditEventType(StrEnum):
     AGENT_TOOL_CALL = "agent_tool_call"
     ACTION_PROPOSED = "action_proposed"
     ACTION_SUPERSEDED = "action_superseded"
+    ACTION_REVISED = "action_revised"
     ACTION_EXPIRED = "action_expired"
     AGENT_RUN_COMPLETED = "agent_run_completed"
     ACTION_APPROVED = "action_approved"

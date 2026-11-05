@@ -98,3 +98,24 @@ export function useRejectAction() {
 export function useExecuteAction() {
   return useActionMutation((id: string) => apiFetch<ActionRecord>(`/actions/${id}/execute`, { method: "POST" }));
 }
+
+export type MessageTone = "friendly" | "firm" | "final_notice";
+
+// Editing creates a NEW action version on the backend; it needs its own approval.
+export function useReviseAction() {
+  return useActionMutation(({ id, message }: { id: string; message: string }) =>
+    apiFetch<ActionRecord>(`/actions/${id}/revise`, {
+      method: "POST",
+      body: JSON.stringify({ message_to_client: message }),
+    }),
+  );
+}
+
+export function useRedraftAction() {
+  return useActionMutation(({ id, tone, language }: { id: string; tone: MessageTone; language: string }) =>
+    apiFetch<ActionRecord>(`/actions/${id}/redraft`, {
+      method: "POST",
+      body: JSON.stringify({ tone, language }),
+    }),
+  );
+}

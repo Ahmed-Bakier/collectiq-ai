@@ -67,3 +67,22 @@ class ApproveActionRequest(BaseModel):
 
 class RejectActionRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
+
+
+class MessageTone(StrEnum):
+    FRIENDLY = "friendly"
+    FIRM = "firm"
+    FINAL_NOTICE = "final_notice"
+
+
+class ReviseActionRequest(BaseModel):
+    """The user edits the client message. Creates a new version that needs approval."""
+
+    message_to_client: str = Field(min_length=1, max_length=1000)
+
+
+class RedraftActionRequest(BaseModel):
+    """Ask the AI to rewrite the client message in a tone and language."""
+
+    tone: MessageTone = MessageTone.FRIENDLY
+    language: str = Field(default="en", pattern=r"^(en|ar|es|fr|de|pt)$")

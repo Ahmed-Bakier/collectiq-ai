@@ -1,7 +1,15 @@
-import type { ReactNode } from "react";
-import { BellRing, CircleAlert, CircleCheck, LoaderCircle, Send, ShieldCheck, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { BellRing, CircleAlert, CircleCheck, LoaderCircle, Pencil, Send, ShieldCheck, Sparkles, X } from "lucide-react";
 import { errorMessage } from "../../api/client";
-import { useAction, useApproveAction, useExecuteAction, useRejectAction } from "../../api/hooks";
+import {
+  useAction,
+  useApproveAction,
+  useExecuteAction,
+  useRedraftAction,
+  useRejectAction,
+  useReviseAction,
+  type MessageTone,
+} from "../../api/hooks";
 import type { ActionRecord } from "../../api/types";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { ErrorState, LoadingState } from "../common/ui";
@@ -11,11 +19,29 @@ const ACTION_TITLES: Record<ActionRecord["action_type"], string> = {
   send_reminder: "Send payment reminder via PayPal",
 };
 
+const TONE_OPTIONS: { value: MessageTone; label: string }[] = [
+  { value: "friendly", label: "Friendly" },
+  { value: "firm", label: "Firm" },
+  { value: "final_notice", label: "Final notice" },
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: "en", label: "English" },
+  { value: "ar", label: "العربية" },
+  { value: "es", label: "Español" },
+  { value: "fr", label: "Français" },
+  { value: "de", label: "Deutsch" },
+  { value: "pt", label: "Português" },
+];
+
 const LABEL = "text-xs font-medium uppercase tracking-wide text-muted";
 const PRIMARY_BUTTON =
   "inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
 const SECONDARY_BUTTON =
   "inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-ink hover:bg-slate-50 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
+const SMALL_BUTTON =
+  "inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-slate-50 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
+const SELECT = "rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
 
 const TONES = {
   warning: "bg-warning/10 text-warning ring-warning/25",
@@ -39,17 +65,40 @@ function statusInfo(action: ActionRecord): { label: string; tone: keyof typeof T
   return { label: "Executed · not verified", tone: "warning" };
 }
 
-export function ActionCard({ action }: { action: ActionRecord }) {
+export function ActionCard({ action, onReplaced }: { action: ActionRecord; onReplaced?: (newId: string) => void }) {
   const approve = useApproveAction();
   const reject = useRejectAction();
   const execute = useExecuteAction();
+  const revise = useReviseAction();
+  const redraft = useRedraftAction();
 
-  const busy = approve.isPending || reject.isPending || execute.isPending;
-  const mutationError = approve.error ?? reject.error ?? execute.error;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(action.message_to_client ?? "");
+  const [tone, setTone] = useState<MessageTone>("friendly");
+  const [language, setLanguage] = useState("en");
+
+  const busy = approve.isPending || reject.isPending || execute.isPending || revise.isPending || redraft.isPending;
+  const mutationError = approve.error ?? reject.error ?? execute.error ?? revise.error ?? redraft.error;
   const isPending = action.approval_status === "pending";
   const canExecute = action.approval_status === "approved" && action.execution_status === "not_started";
   const status = statusInfo(action);
   const Icon = action.action_type === "send_invoice" ? Send : BellRing;
+
+  function saveEdit() {
+    revise.mutate(
+      { id: action.id, message: draft },
+      {
+        onSuccess: (next) => {
+          setEditing(false);
+          onReplaced?.(next.id);
+        },
+      },
+    );
+  }
+
+  function rewriteWithAI() {
+    redraft.mutate({ id: action.id, tone, language }, { onSuccess: (next) => onReplaced?.(next.id) });
+  }
 
   return (
     <article
@@ -80,14 +129,97 @@ export function ActionCard({ action }: { action: ActionRecord }) {
           <p className="mt-1 text-ink">{action.reason}</p>
         </div>
 
-        {action.message_to_client && (
-          <div>
-            <p className={LABEL}>Message to client</p>
-            <blockquote className="mt-1 rounded-lg border-l-2 border-accent bg-slate-50 px-3 py-2 text-ink">
-              {action.message_to_client}
+        <div>
+          <p className={LABEL}>Message to client</p>
+          {editing ? (
+            <div className="mt-1 space-y-2">
+              <label htmlFor={`edit-${action.id}`} className="sr-only">
+                Edit message to client
+              </label>
+              <textarea
+                id={`edit-${action.id}`}
+                dir="auto"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                maxLength={1000}
+                rows={4}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className={SMALL_BUTTON} disabled={busy || !draft.trim()} onClick={saveEdit}>
+                  {revise.isPending && <LoaderCircle className="size-3.5 animate-spin" aria-hidden />}
+                  Save as new version
+                </button>
+                <button
+                  type="button"
+                  className={SMALL_BUTTON}
+                  disabled={busy}
+                  onClick={() => {
+                    setEditing(false);
+                    setDraft(action.message_to_client ?? "");
+                  }}
+                >
+                  Cancel
+                </button>
+                <span className="text-xs text-muted">Saving creates a new version that needs a new approval.</span>
+              </div>
+            </div>
+          ) : (
+            <blockquote dir="auto" className="mt-1 rounded-lg border-l-2 border-accent bg-slate-50 px-3 py-2 text-ink">
+              {action.message_to_client ?? <span className="text-muted">No message.</span>}
             </blockquote>
-          </div>
-        )}
+          )}
+
+          {isPending && !editing && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button type="button" className={SMALL_BUTTON} disabled={busy} onClick={() => setEditing(true)}>
+                <Pencil className="size-3.5" aria-hidden />
+                Edit
+              </button>
+              <span className="text-xs text-muted">or rewrite with AI:</span>
+              <label className="sr-only" htmlFor={`tone-${action.id}`}>
+                Tone
+              </label>
+              <select
+                id={`tone-${action.id}`}
+                className={SELECT}
+                value={tone}
+                onChange={(event) => setTone(event.target.value as MessageTone)}
+                disabled={busy}
+              >
+                {TONE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <label className="sr-only" htmlFor={`language-${action.id}`}>
+                Language
+              </label>
+              <select
+                id={`language-${action.id}`}
+                className={SELECT}
+                value={language}
+                onChange={(event) => setLanguage(event.target.value)}
+                disabled={busy}
+              >
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className={SMALL_BUTTON} disabled={busy} onClick={rewriteWithAI}>
+                {redraft.isPending ? (
+                  <LoaderCircle className="size-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <Sparkles className="size-3.5 text-accent" aria-hidden />
+                )}
+                Rewrite
+              </button>
+            </div>
+          )}
+        </div>
 
         <details className="rounded-lg border border-slate-200 px-3 py-2">
           <summary className="cursor-pointer text-xs font-medium text-muted">Exact PayPal parameters</summary>
@@ -108,7 +240,7 @@ export function ActionCard({ action }: { action: ActionRecord }) {
         )}
       </div>
 
-      {(isPending || canExecute) && (
+      {(isPending || canExecute) && !editing && (
         <footer className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3">
           {isPending && (
             <>
@@ -118,7 +250,11 @@ export function ActionCard({ action }: { action: ActionRecord }) {
                 disabled={busy}
                 onClick={() => approve.mutate({ id: action.id, parametersHash: action.parameters_hash })}
               >
-                {approve.isPending ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <ShieldCheck className="size-4" aria-hidden />}
+                {approve.isPending ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <ShieldCheck className="size-4" aria-hidden />
+                )}
                 Approve
               </button>
               <button type="button" className={SECONDARY_BUTTON} disabled={busy} onClick={() => reject.mutate({ id: action.id })}>
@@ -131,12 +267,14 @@ export function ActionCard({ action }: { action: ActionRecord }) {
           {canExecute && (
             <>
               <button type="button" className={PRIMARY_BUTTON} disabled={busy} onClick={() => execute.mutate(action.id)}>
-                {execute.isPending ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
+                {execute.isPending ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Send className="size-4" aria-hidden />
+                )}
                 {execute.isPending ? "Executing in PayPal…" : "Execute in PayPal"}
               </button>
-              <p className="text-xs text-muted">
-                Approved {formatDateTime(action.decided_at)} · execute within 15 minutes.
-              </p>
+              <p className="text-xs text-muted">Approved {formatDateTime(action.decided_at)} · execute within 15 minutes.</p>
             </>
           )}
         </footer>
@@ -149,7 +287,11 @@ function Outcome({ action }: { action: ActionRecord }) {
   if (action.execution_status === "succeeded") {
     const verified = action.verification_status === "verified";
     return (
-      <Panel tone="success" icon={<CircleCheck className="size-4" aria-hidden />} title={verified ? "Done — verified in PayPal" : "PayPal accepted the request"}>
+      <Panel
+        tone="success"
+        icon={<CircleCheck className="size-4" aria-hidden />}
+        title={verified ? "Done — verified in PayPal" : "PayPal accepted the request"}
+      >
         {verified
           ? "CollectIQ read the invoice back from PayPal after executing and confirmed the result."
           : "CollectIQ could not confirm the expected status when reading the invoice back from PayPal."}
@@ -177,7 +319,7 @@ function Outcome({ action }: { action: ActionRecord }) {
   if (action.approval_status === "expired" || action.approval_status === "superseded") {
     return (
       <Panel tone="muted" title={action.approval_status === "expired" ? "Expired" : "Superseded"}>
-        This proposal can no longer be approved. Ask the agent for a fresh analysis.
+        This version can no longer be approved.
       </Panel>
     );
   }
@@ -213,9 +355,11 @@ function Panel({
   );
 }
 
+// Used in the chat: follows the action to its newest version after an edit or AI rewrite.
 export function ActionCardById({ actionId }: { actionId: string }) {
-  const action = useAction(actionId);
+  const [currentId, setCurrentId] = useState(actionId);
+  const action = useAction(currentId);
   if (action.isPending) return <LoadingState label="Loading proposed action…" />;
   if (action.isError) return <ErrorState message={errorMessage(action.error)} />;
-  return <ActionCard action={action.data} />;
+  return <ActionCard key={action.data.id} action={action.data} onReplaced={setCurrentId} />;
 }

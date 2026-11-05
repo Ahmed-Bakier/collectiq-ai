@@ -18,6 +18,7 @@ const EVENT_LABELS: Record<string, string> = {
   agent_tool_call: "Tool call",
   action_proposed: "Action proposed",
   action_superseded: "Action superseded",
+  action_revised: "Message revised",
   action_expired: "Approval expired",
   agent_run_completed: "Agent run completed",
   action_approved: "Approved",

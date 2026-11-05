@@ -76,3 +76,25 @@ def test_rate_limit_maps_to_typed_error() -> None:
 def test_missing_api_key_raises_not_configured() -> None:
     with pytest.raises(LLMNotConfiguredError):
         OpenAICompatibleLLM(make_settings())
+
+
+def test_plain_completion_omits_tools() -> None:
+    requests: list[httpx.Request] = []
+    plain_completion = {
+        "id": "chatcmpl-plain",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "gemini-3.6-flash",
+        "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "Hello"}}],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=plain_completion)
+
+    response = asyncio.run(make_llm(httpx.MockTransport(handler)).complete([{"role": "user", "content": "hi"}], []))
+
+    assert response.content == "Hello"
+    body = json.loads(requests[0].content)
+    assert "tools" not in body
+    assert "tool_choice" not in body
