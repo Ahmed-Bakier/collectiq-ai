@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("")
     llm_reasoning_effort: str | None = None
 
+    # Background autopilot schedule in minutes (0 = disabled; use "Run now" instead).
+    autopilot_interval_minutes: int = 0
+
     @property
     def paypal_credentials_configured(self) -> bool:
         """Return True when real (non-placeholder) PayPal credentials are present."""
