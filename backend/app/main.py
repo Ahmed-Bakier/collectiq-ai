@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
-from app.api.routes import actions, agent, audit, autopilot, health, integrations, invoices
+from app.api.routes import actions, agent, audit, autopilot, health, insights, integrations, invoices
 from app.core.config import get_settings
 from app.db.session import init_db
 from app.services.autopilot import autopilot_scheduler
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
         actions.router,
         audit.router,
         autopilot.router,
+        insights.router,
     ):
         app.include_router(router, prefix="/api")
     return app

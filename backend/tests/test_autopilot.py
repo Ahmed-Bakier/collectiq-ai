@@ -129,3 +129,14 @@ def test_settings_validation() -> None:
 
     assert client.put("/api/autopilot/settings", json={"auto_approve_max_amount": "-5"}).status_code == 422
     assert client.put("/api/autopilot/settings", json={"unknown": True}).status_code == 422
+
+
+def test_autopilot_run_events_are_authored_by_system() -> None:
+    client = setup(make_book(), drafting_llm())
+
+    run = client.post("/api/autopilot/run").json()
+
+    events = client.get("/api/audit?limit=200").json()["items"]
+    actors = {event["event_type"]: event["actor"] for event in events if event["run_id"] == run["run_id"]}
+    assert actors["action_proposed"] == "system"
+    assert actors["agent_run_completed"] == "system"
