@@ -1,10 +1,11 @@
 """Collection Autopilot.
 
 A deterministic playbook decides WHICH invoices need action, WHICH action and
-WHICH tone. The LLM only drafts the client message (templates are the fallback).
+WHICH tone (escalated one step for high-risk clients, from PayPal payment
+history). The LLM only drafts the client message (templates are the fallback).
 Every action is proposed and audited. Auto-approval is limited to a strict,
-user-enabled policy: friendly payment reminders up to a maximum amount.
-Invoices are never sent automatically.
+user-enabled policy: friendly reminders up to a maximum amount, never for
+high-risk clients. Invoices are never sent automatically.
 """
 
 import asyncio
@@ -38,11 +39,13 @@ from app.schemas.autopilot import (
     AutopilotSettingsUpdate,
     SkippedInvoice,
 )
+from app.schemas.insights import RiskLevel
 from app.services.actions import save_agent_run
 from app.services.approvals import approve_action, execute_action
 from app.services.audit import record_event
+from app.services.client_insights import ClientInsightsService, build_insights, client_key
 from app.services.invoice_analysis import analyze_invoices, collectible_amount
-from app.services.invoices import InvoiceService
+from app.services.invoices import InvoiceService, to_invoice_summary
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +61,13 @@ PLAYBOOK_ACTIONS: dict[SuggestedAction, ProposedActionType] = {
 
 # ---------- Playbook rules (deterministic) ----------
 
-def playbook_tone(item: AnalyzedInvoice) -> MessageTone:
-    """Escalation ladder based on days overdue."""
+def playbook_tone(item: AnalyzedInvoice, risk: RiskLevel | None = None) -> MessageTone:
+    """Escalation ladder based on days overdue; one step firmer for high-risk clients."""
     days = item.days_overdue or 0
-    if item.collection_state is CollectionState.OVERDUE and days > 21:
+    overdue = item.collection_state is CollectionState.OVERDUE
+    if overdue and days > 21:
         return MessageTone.FINAL_NOTICE
-    if item.collection_state is CollectionState.OVERDUE and days > 7:
+    if overdue and (days > 7 or risk is RiskLevel.HIGH):
         return MessageTone.FIRM
     return MessageTone.FRIENDLY
 
@@ -176,13 +180,19 @@ class AutopilotService:
         if not settings.enabled:
             raise ConflictError("Autopilot is paused. Turn it on to run the collection playbook.")
 
-        invoices = await self._invoice_service.list_all_invoices()
+        # One PayPal read feeds both the collection analysis and the client risk levels.
+        raw_invoices = await ClientInsightsService(self._invoice_service).load_invoices()
+        invoices = [to_invoice_summary(invoice) for invoice in raw_invoices]
         analysis = analyze_invoices(invoices, today=self._today, timezone=self._timezone)
+        insights = build_insights(raw_invoices, self._today, self._timezone)
+        risks = {insight.client: insight.risk_level for insight in insights.clients}
+
         history = await self._actions_by_invoice({item.invoice.id for item in analysis.invoices})
         now = utc_now()
 
         proposals: list[ProposedAction] = []
         tones: dict[str, MessageTone] = {}
+        client_risks: dict[str, RiskLevel | None] = {}
         skipped: list[SkippedInvoice] = []
         eligible = 0
         fallback_used = False
@@ -205,7 +215,8 @@ class AutopilotService:
                 )
                 continue
 
-            tone = playbook_tone(item)
+            risk = risks.get(client_key(item.invoice))
+            tone = playbook_tone(item, risk)
             message, used_fallback = await self._draft(item, action_type, tone)
             fallback_used = fallback_used or used_fallback
             proposal = build_proposal(
@@ -213,12 +224,13 @@ class AutopilotService:
                 ProposeActionArgs(
                     invoice_id=item.invoice.id,
                     action_type=action_type,
-                    reason=self._reason(item, tone),
+                    reason=self._reason(item, tone, risk),
                     message_to_client=message,
                 ),
             )
             proposals.append(proposal)
             tones[proposal.id] = tone
+            client_risks[proposal.id] = risk
 
         run = AgentRunResponse(
             run_id=str(uuid.uuid4()),
@@ -236,10 +248,11 @@ class AutopilotService:
         auto_count = 0
         for proposal in proposals:
             tone = tones[proposal.id]
+            risk = client_risks[proposal.id]
             record = await self._session.get(ActionRecord, proposal.id)
             assert record is not None
             auto = False
-            if auto_count < MAX_AUTO_ACTIONS_PER_RUN and self._auto_approvable(settings, proposal, tone):
+            if auto_count < MAX_AUTO_ACTIONS_PER_RUN and self._auto_approvable(settings, proposal, tone, risk):
                 policy = f"friendly reminder up to {settings.auto_approve_max_amount}"
                 await approve_action(
                     self._session,
@@ -251,7 +264,14 @@ class AutopilotService:
                 record = await execute_action(self._session, self._invoices_api, proposal.id)
                 auto = True
                 auto_count += 1
-            results.append(AutopilotProposal(action=ActionResponse.model_validate(record), tone=tone, auto_approved=auto))
+            results.append(
+                AutopilotProposal(
+                    action=ActionResponse.model_validate(record),
+                    tone=tone,
+                    auto_approved=auto,
+                    client_risk=risk,
+                )
+            )
 
         settings.last_run_at = now
         summary = (
@@ -332,14 +352,22 @@ class AutopilotService:
         return fallback_message(item, action_type, tone), True
 
     @staticmethod
-    def _reason(item: AnalyzedInvoice, tone: MessageTone) -> str:
+    def _reason(item: AnalyzedInvoice, tone: MessageTone, risk: RiskLevel | None) -> str:
         evidence = item.reasons[1] if len(item.reasons) > 1 else item.collection_state.value
-        return f"Playbook: {evidence}; {tone.value.replace('_', ' ')} tone."
+        reason = f"Playbook: {evidence}; {tone.value.replace('_', ' ')} tone"
+        if tone is not playbook_tone(item):
+            reason += "; escalated one step because this client usually pays late (high risk)"
+        return reason + "."
 
     @staticmethod
-    def _auto_approvable(settings: AutopilotSettingsRecord, proposal: ProposedAction, tone: MessageTone) -> bool:
-        """Strict policy: only friendly reminders up to the user's limit. Never invoices."""
-        if not settings.auto_approve_enabled:
+    def _auto_approvable(
+        settings: AutopilotSettingsRecord,
+        proposal: ProposedAction,
+        tone: MessageTone,
+        risk: RiskLevel | None,
+    ) -> bool:
+        """Strict policy: only friendly reminders up to the user's limit. Never invoices or high-risk clients."""
+        if not settings.auto_approve_enabled or risk is RiskLevel.HIGH:
             return False
         if proposal.action_type is not ProposedActionType.SEND_REMINDER or tone is not MessageTone.FRIENDLY:
             return False

@@ -134,3 +134,27 @@ def test_agent_stops_after_max_steps() -> None:
 
     assert result.status is AgentRunStatus.INCOMPLETE
     assert len(result.tool_calls) == MAX_AGENT_STEPS
+
+
+def test_agent_reads_client_insights() -> None:
+    import json
+
+    llm = ScriptedLLM([tool_call("get_client_insights", {}), final_answer("Here is the forecast.")])
+    result = run_agent(llm, "Who pays late and how much will I collect this month?")
+
+    record = result.tool_calls[0]
+    assert record.name == "get_client_insights"
+    assert record.status == "ok"
+    assert "client(s)" in record.detail
+    tool_messages = [message for message in llm.received[1] if message["role"] == "tool"]
+    content = json.loads(tool_messages[0]["content"])
+    assert content["clients"] and content["clients"][0]["risk_level"] == "new"
+    assert "weeks" in content["forecast"]
+
+
+def test_client_insights_filter_reports_unknown_client() -> None:
+    llm = ScriptedLLM([tool_call("get_client_insights", {"client": "Nobody Inc"}), final_answer("ok")])
+    result = run_agent(llm)
+
+    assert result.tool_calls[0].status == "error"
+    assert "No client matching" in result.tool_calls[0].detail
