@@ -13,6 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from app.agent.message_guard import check_message
 from app.integrations.paypal.exceptions import PayPalError
 from app.integrations.paypal.invoices import INVOICE_ID_PATTERN
 from app.schemas.agent import ProposedAction, ProposedActionType, ToolCallRecord
@@ -190,6 +191,13 @@ async def _propose_action(context: AgentRunContext, args: ProposeActionArgs) -> 
     )
     if duplicate:
         return {"accepted": False, "error": "This action was already proposed in this run."}
+
+    violations = check_message(args.message_to_client)
+    if violations:
+        return {
+            "accepted": False,
+            "error": "Message safety check failed: " + "; ".join(violations) + ". Rewrite message_to_client without it.",
+        }
 
     proposal = _build_proposal(item, args)
     context.proposals.append(proposal)
