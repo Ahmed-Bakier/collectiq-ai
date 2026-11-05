@@ -3,6 +3,9 @@ import { apiFetch } from "./client";
 import type {
   ActionRecord,
   AgentRunResponse,
+  AutopilotRunResponse,
+  AutopilotSettings,
+  AutopilotSettingsUpdate,
   ApprovalStatus,
   AuditEvent,
   InvoiceAnalysisResponse,
@@ -118,4 +121,40 @@ export function useRedraftAction() {
       body: JSON.stringify({ tone, language }),
     }),
   );
+}
+
+// ---------- Collection Autopilot ----------
+
+export function useAutopilotSettings() {
+  return useQuery({
+    queryKey: ["autopilot-settings"],
+    queryFn: () => apiFetch<AutopilotSettings>("/autopilot/settings"),
+  });
+}
+
+export function useUpdateAutopilotSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (update: AutopilotSettingsUpdate) =>
+      apiFetch<AutopilotSettings>("/autopilot/settings", { method: "PUT", body: JSON.stringify(update) }),
+    onSuccess: (settings) => {
+      queryClient.setQueryData(["autopilot-settings"], settings);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["audit"] });
+    },
+  });
+}
+
+// Runs the playbook now. Proposals still need approval unless the strict auto-approve policy applies.
+export function useRunAutopilot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<AutopilotRunResponse>("/autopilot/run", { method: "POST" }),
+    onSettled: () => {
+      for (const key of ["actions", "action", "audit", "invoice-analysis", "autopilot-settings"]) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
+    },
+  });
 }

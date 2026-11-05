@@ -29,6 +29,8 @@ const EVENT_LABELS: Record<string, string> = {
   execution_failed: "Execution failed",
   execution_outcome_unknown: "Outcome unknown",
   verification_completed: "Verified with PayPal",
+  autopilot_run_completed: "Autopilot run",
+  autopilot_settings_changed: "Autopilot settings changed",
 };
 
 const EVENT_TONES: Record<string, string> = {
