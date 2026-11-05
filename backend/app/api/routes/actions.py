@@ -1,10 +1,14 @@
-"""Proposed action endpoints: list, approve, reject, execute."""
+"""Proposed action endpoints: list, approve, reject, revise, redraft, execute."""
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.dependencies import get_llm
+from app.agent.drafting import draft_client_message
+from app.agent.llm import LLM
+from app.core.exceptions import ConflictError
 from app.db.session import get_session
 from app.integrations.paypal.client import PayPalClient
 from app.integrations.paypal.dependencies import get_paypal_client
@@ -14,10 +18,14 @@ from app.schemas.actions import (
     ActionResponse,
     ApprovalStatus,
     ApproveActionRequest,
+    RedraftActionRequest,
     RejectActionRequest,
+    ReviseActionRequest,
 )
+from app.schemas.audit import AuditActor
 from app.services.actions import get_action, list_actions
 from app.services.approvals import approve_action, execute_action, reject_action
+from app.services.revisions import revise_action
 
 router = APIRouter(prefix="/actions", tags=["actions"])
 
@@ -54,6 +62,36 @@ async def reject_action_route(
 ) -> ActionResponse:
     reason = body.reason if body else None
     return ActionResponse.model_validate(await reject_action(session, action_id, reason))
+
+
+@router.post("/{action_id}/revise", response_model=ActionResponse)
+async def revise_action_route(action_id: ActionId, body: ReviseActionRequest, session: Session) -> ActionResponse:
+    """User edits the client message. Returns a NEW pending version that needs approval."""
+    revised = await revise_action(session, action_id, message=body.message_to_client, actor=AuditActor.USER)
+    return ActionResponse.model_validate(revised)
+
+
+@router.post("/{action_id}/redraft", response_model=ActionResponse)
+async def redraft_action_route(
+    action_id: ActionId,
+    body: RedraftActionRequest,
+    session: Session,
+    llm: Annotated[LLM, Depends(get_llm)],
+) -> ActionResponse:
+    """AI rewrites the client message in a tone and language. Returns a NEW pending version."""
+    action = await get_action(session, action_id)
+    if action.approval_status != ApprovalStatus.PENDING.value:
+        raise ConflictError(f"Only pending actions can be edited (current: {action.approval_status}).")
+
+    message = await draft_client_message(llm, action, body.tone, body.language)
+    revised = await revise_action(
+        session,
+        action_id,
+        message=message,
+        actor=AuditActor.AGENT,
+        details={"tone": body.tone.value, "language": body.language},
+    )
+    return ActionResponse.model_validate(revised)
 
 
 @router.post("/{action_id}/execute", response_model=ActionResponse)

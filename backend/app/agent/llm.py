@@ -87,12 +87,11 @@ class OpenAICompatibleLLM:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
     ) -> LLMResponse:
-        kwargs: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
-        }
+        kwargs: dict[str, Any] = {"model": self.model, "messages": messages}
+        if tools:
+            # Plain completions (e.g. message drafting) are sent without tools.
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
         if self._settings.llm_reasoning_effort:
             kwargs["reasoning_effort"] = self._settings.llm_reasoning_effort
 
