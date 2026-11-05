@@ -181,6 +181,7 @@ export interface AutopilotProposal {
   action: ActionRecord;
   tone: AutopilotTone;
   auto_approved: boolean;
+  client_risk: RiskLevel | null;
 }
 
 export interface AutopilotRunResponse {
@@ -193,4 +194,65 @@ export interface AutopilotRunResponse {
   llm_fallback_used: boolean;
   proposals: AutopilotProposal[];
   skipped: SkippedInvoice[];
+}
+
+// ---------- Client payment intelligence ----------
+
+export type RiskLevel = "low" | "medium" | "high" | "new";
+
+export interface ClientInsight {
+  client: string;
+  currency_code: string | null;
+  invoice_count: number;
+  paid_count: number;
+  on_time_count: number;
+  on_time_rate: number | null; // 0..1
+  avg_days_late: number | null;
+  max_days_late: number | null;
+  open_count: number;
+  open_amount: string;
+  overdue_amount: string;
+  oldest_overdue_days: number | null;
+  risk_level: RiskLevel;
+  risk_reasons: string[];
+}
+
+export interface ForecastBucket {
+  label: string;
+  start: string;
+  end: string;
+  expected_amount: string;
+  at_risk_amount: string;
+  invoice_count: number;
+}
+
+export interface ForecastInvoice {
+  invoice_id: string;
+  invoice_number: string | null;
+  client: string;
+  amount: string;
+  due_date: string;
+  expected_date: string;
+  risk_level: RiskLevel;
+  at_risk: boolean;
+}
+
+export interface CashFlowForecast {
+  currency_code: string | null;
+  horizon_days: number;
+  total_open: string;
+  expected_within_horizon: string;
+  expected_later: string;
+  at_risk_amount: string;
+  unscheduled_amount: string;
+  buckets: ForecastBucket[];
+  invoices: ForecastInvoice[];
+  method: string;
+}
+
+export interface InsightsResponse {
+  as_of: string;
+  timezone: string;
+  clients: ClientInsight[];
+  forecast: CashFlowForecast;
 }

@@ -5,6 +5,7 @@ import { useAutopilotSettings, useRunAutopilot, useUpdateAutopilotSettings } fro
 import type { AutopilotProposal, AutopilotRunResponse, AutopilotSettings, AutopilotTone } from "../api/types";
 import { ActionCardById } from "../components/approvals/ActionCard";
 import { LoadingState } from "../components/common/ui";
+import { RiskBadge } from "../components/insights/RiskBadge";
 
 const PANEL = "rounded-xl border border-black/5 bg-white p-5 shadow-sm";
 
@@ -251,6 +252,7 @@ function PlaybookPanel({ settings }: { settings: AutopilotSettings }) {
       </h3>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted">
         <li>Skips invoices that already have a proposal waiting for approval.</li>
+        <li>High-risk clients (usually pay late) get a firmer tone and are never auto-approved.</li>
         <li>No reminder if one was sent in the last {settings.cooldown_days} days.</li>
         <li>AI writes messages from invoice facts only; templates are used if the AI is unavailable.</li>
         <li>PayPal status is re-checked before and verified after every execution.</li>
@@ -338,6 +340,7 @@ function ProposalGroup({ title, proposals }: { title: string; proposals: Autopil
         <div key={proposal.action.id}>
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <ToneBadge tone={proposal.tone} />
+            {proposal.client_risk && <RiskBadge level={proposal.client_risk} />}
             {proposal.auto_approved && (
               <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
                 <BadgeCheck className="size-3.5" aria-hidden />

@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router";
-import { Bot, FileText, History, LayoutDashboard, Plug, ShieldCheck, Sparkles, type LucideIcon } from "lucide-react";
+import { Bot, FileText, History, LayoutDashboard, Plug, ShieldCheck, Sparkles, Users, type LucideIcon } from "lucide-react";
 import { usePayPalStatus } from "../../api/hooks";
 
 interface NavItem {
@@ -12,6 +12,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/invoices", label: "Invoices", icon: FileText },
+  { to: "/clients", label: "Clients", icon: Users },
   { to: "/assistant", label: "AI Assistant", icon: Sparkles },
   { to: "/autopilot", label: "Autopilot", icon: Bot },
   { to: "/approvals", label: "Approvals", icon: ShieldCheck },
