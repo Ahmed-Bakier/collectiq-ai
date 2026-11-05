@@ -14,12 +14,15 @@ import {
   PriorityBadge,
   StateBadge,
 } from "../components/common/ui";
+import { InsightsSection } from "../components/insights/InsightsSection";
 import { clientName, formatDate, formatMoney } from "../lib/format";
 
 const SUGGESTED_PROMPTS = [
   "Which invoices need my attention this week?",
   "Which clients are overdue and what should I do?",
   "Summarize my outstanding balance.",
+  "Which clients usually pay late?",
+  "How much will I collect in the next 30 days?",
 ];
 
 const ACTION_LABELS: Record<SuggestedAction, string> = {
@@ -144,6 +147,8 @@ function DashboardContent({ data }: { data: InvoiceAnalysisResponse }) {
           Totals shown in {totals.currency_code}. Amounts in other currencies are not converted.
         </p>
       )}
+
+      <InsightsSection />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">

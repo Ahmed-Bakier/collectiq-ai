@@ -8,6 +8,7 @@ import type {
   AutopilotSettingsUpdate,
   ApprovalStatus,
   AuditEvent,
+  InsightsResponse,
   InvoiceAnalysisResponse,
   PayPalStatus,
 } from "./types";
@@ -156,5 +157,15 @@ export function useRunAutopilot() {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
     },
+  });
+}
+
+// ---------- Client payment intelligence (read-only) ----------
+
+export function useInsights() {
+  return useQuery({
+    queryKey: ["insights"],
+    queryFn: () => apiFetch<InsightsResponse>("/insights"),
+    staleTime: 60_000,
   });
 }

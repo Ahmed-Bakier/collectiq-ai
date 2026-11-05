@@ -7,6 +7,7 @@ import { ActivityPage } from "./pages/ActivityPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { AssistantPage } from "./pages/AssistantPage";
 import { AutopilotPage } from "./pages/AutopilotPage";
+import { ClientsPage } from "./pages/ClientsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -28,6 +29,7 @@ export default function App() {
               </Suspense>
             }
           />
+          <Route path="clients" element={<ClientsPage />} />
           <Route path="assistant" element={<AssistantPage />} />
           <Route path="autopilot" element={<AutopilotPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
