@@ -29,6 +29,8 @@ class AuditEventType(StrEnum):
     EXECUTION_FAILED = "execution_failed"
     EXECUTION_OUTCOME_UNKNOWN = "execution_outcome_unknown"
     VERIFICATION_COMPLETED = "verification_completed"
+    AUTOPILOT_RUN_COMPLETED = "autopilot_run_completed"
+    AUTOPILOT_SETTINGS_CHANGED = "autopilot_settings_changed"
 
 
 class AuditEventResponse(BaseModel):
