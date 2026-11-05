@@ -6,6 +6,7 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { ActivityPage } from "./pages/ActivityPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { AssistantPage } from "./pages/AssistantPage";
+import { AutopilotPage } from "./pages/AutopilotPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
@@ -28,6 +29,7 @@ export default function App() {
             }
           />
           <Route path="assistant" element={<AssistantPage />} />
+          <Route path="autopilot" element={<AutopilotPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
           <Route path="activity" element={<ActivityPage />} />
           <Route path="integrations" element={<IntegrationsPage />} />

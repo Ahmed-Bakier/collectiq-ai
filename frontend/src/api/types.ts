@@ -149,3 +149,48 @@ export interface AuditEvent {
   message: string;
   details: Record<string, unknown>;
 }
+
+// ---------- Collection Autopilot ----------
+
+export type AutopilotTone = "friendly" | "firm" | "final_notice";
+
+export interface AutopilotSettings {
+  enabled: boolean;
+  auto_approve_enabled: boolean;
+  auto_approve_max_amount: string; // Decimal serialized as string
+  cooldown_days: number;
+  max_auto_actions_per_run: number;
+  schedule_interval_minutes: number;
+  last_run_at: string | null;
+}
+
+export interface AutopilotSettingsUpdate {
+  enabled?: boolean;
+  auto_approve_enabled?: boolean;
+  auto_approve_max_amount?: string;
+}
+
+export interface SkippedInvoice {
+  invoice_id: string;
+  invoice_number: string | null;
+  client: string | null;
+  reason: string;
+}
+
+export interface AutopilotProposal {
+  action: ActionRecord;
+  tone: AutopilotTone;
+  auto_approved: boolean;
+}
+
+export interface AutopilotRunResponse {
+  run_id: string;
+  trigger: string;
+  summary: string;
+  evaluated_invoices: number;
+  eligible_invoices: number;
+  auto_executed_count: number;
+  llm_fallback_used: boolean;
+  proposals: AutopilotProposal[];
+  skipped: SkippedInvoice[];
+}
