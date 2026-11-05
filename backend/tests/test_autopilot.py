@@ -140,3 +140,26 @@ def test_autopilot_run_events_are_authored_by_system() -> None:
     actors = {event["event_type"]: event["actor"] for event in events if event["run_id"] == run["run_id"]}
     assert actors["action_proposed"] == "system"
     assert actors["agent_run_completed"] == "system"
+
+
+def test_high_risk_client_gets_firmer_tone_and_is_never_auto_approved() -> None:
+    from tests.test_client_insights import paid_invoice
+
+    book = FakeInvoiceBook(
+        [
+            paid_invoice("INV2-LATE-H001", "Late Co", "2026-09-01", "2026-09-26"),  # 25 days late
+            paid_invoice("INV2-LATE-H002", "Late Co", "2026-10-01", "2026-10-21"),  # 20 days late
+            invoice_json("INV2-LATE-OPEN", "SENT", "2026-11-17", "200.00", "Late Co"),  # 3 days overdue
+        ]
+    )
+    client = setup(book, drafting_llm(1))
+    client.put("/api/autopilot/settings", json={"auto_approve_enabled": True, "auto_approve_max_amount": "500"})
+
+    run = client.post("/api/autopilot/run").json()
+
+    proposal = by_invoice(run)["INV2-LATE-OPEN"]
+    assert proposal["client_risk"] == "high"
+    assert proposal["tone"] == "firm"  # Friendly at 3 days overdue, escalated for a high-risk client.
+    assert proposal["auto_approved"] is False  # Small amount, but high-risk clients always need a human.
+    assert "escalated" in proposal["action"]["reason"]
+    assert book.writes == []

@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.actions import ActionResponse, MessageTone
+from app.schemas.insights import RiskLevel
 
 
 class AutopilotSettingsResponse(BaseModel):
@@ -37,6 +38,7 @@ class AutopilotProposal(BaseModel):
     action: ActionResponse
     tone: MessageTone
     auto_approved: bool
+    client_risk: RiskLevel | None = None
 
 
 class AutopilotRunResponse(BaseModel):

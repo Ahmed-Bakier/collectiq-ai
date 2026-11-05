@@ -22,6 +22,8 @@ from app.schemas.analysis import (
     InvoiceAnalysisResponse,
     SuggestedAction,
 )
+from app.schemas.insights import ClientInsight, InsightsResponse
+from app.services.client_insights import ClientInsightsService
 from app.services.invoice_analysis import analyze_invoices, collectible_amount
 from app.services.invoices import InvoiceService
 
@@ -43,6 +45,7 @@ class AgentRunContext:
     analysis: InvoiceAnalysisResponse | None = None
     proposals: list[ProposedAction] = field(default_factory=list)
     tool_records: list[ToolCallRecord] = field(default_factory=list)
+    insights: InsightsResponse | None = None
 
     async def get_analysis(self) -> InvoiceAnalysisResponse:
         """Load PayPal invoices and analyze them once per run."""
@@ -50,6 +53,13 @@ class AgentRunContext:
             invoices = await self.invoice_service.list_all_invoices()
             self.analysis = analyze_invoices(invoices, today=self.today, timezone=self.timezone)
         return self.analysis
+
+    async def get_insights(self) -> InsightsResponse:
+        """Load client payment intelligence once per run (read-only)."""
+        if self.insights is None:
+            service = ClientInsightsService(self.invoice_service)
+            self.insights = await service.build(self.today, self.timezone)
+        return self.insights
 
     def find(self, invoice_id: str) -> AnalyzedInvoice | None:
         if self.analysis is None:
@@ -292,6 +302,9 @@ def _describe_success(name: str, result: dict[str, Any]) -> str:
         return f"Loaded invoice {result.get('invoice_id')}"
     if name == "propose_action":
         return f"Proposed action {result.get('action_id')} (awaiting approval)"
+    if name == "get_client_insights":
+        count = len(result.get("clients", []))
+        return f"Loaded payment behaviour for {count} client(s)"
     return "ok"
 
 
@@ -337,3 +350,93 @@ async def execute_tool(context: AgentRunContext, name: str, raw_arguments: str) 
 
 # Public alias used by the autopilot playbook.
 build_proposal = _build_proposal
+
+
+# ---------- Client payment intelligence (read-only) ----------
+
+class ClientInsightsArgs(StrictArgs):
+    client: str | None = Field(default=None, max_length=100)
+
+
+def _compact_client(insight: ClientInsight) -> dict[str, Any]:
+    return {
+        "client": insight.client,
+        "risk_level": insight.risk_level.value,
+        "risk_reasons": insight.risk_reasons,
+        "paid_invoices": insight.paid_count,
+        "on_time_rate": insight.on_time_rate,
+        "avg_days_late": insight.avg_days_late,
+        "open_amount": str(insight.open_amount),
+        "overdue_amount": str(insight.overdue_amount),
+        "currency": insight.currency_code,
+    }
+
+
+async def _get_client_insights(context: AgentRunContext, args: ClientInsightsArgs) -> dict[str, Any]:
+    insights = await context.get_insights()
+    clients = insights.clients
+    if args.client:
+        needle = args.client.strip().lower()
+        clients = [insight for insight in clients if needle in insight.client.lower()]
+        if not clients:
+            return {"error": f"No client matching '{args.client}' was found in PayPal data."}
+
+    forecast = insights.forecast
+    return {
+        "as_of": insights.as_of.isoformat(),
+        "clients": [_compact_client(insight) for insight in clients],
+        "forecast": {
+            "currency": forecast.currency_code,
+            "horizon_days": forecast.horizon_days,
+            "total_open": str(forecast.total_open),
+            "expected_within_horizon": str(forecast.expected_within_horizon),
+            "expected_later": str(forecast.expected_later),
+            "at_risk_amount": str(forecast.at_risk_amount),
+            "weeks": [
+                {
+                    "period": bucket.label,
+                    "expected": str(bucket.expected_amount),
+                    "at_risk": str(bucket.at_risk_amount),
+                }
+                for bucket in forecast.buckets
+            ],
+            "at_risk_invoices": [
+                {
+                    "invoice_id": row.invoice_id,
+                    "client": row.client,
+                    "amount": str(row.amount),
+                    "due_date": row.due_date.isoformat(),
+                    "expected_date": row.expected_date.isoformat(),
+                }
+                for row in forecast.invoices
+                if row.at_risk
+            ],
+            "method": forecast.method,
+        },
+    }
+
+
+TOOLS["get_client_insights"] = AgentTool("get_client_insights", ClientInsightsArgs, _get_client_insights)
+TOOL_DEFINITIONS.append(
+    {
+        "type": "function",
+        "function": {
+            "name": "get_client_insights",
+            "description": (
+                "Read each client's payment behaviour from PayPal payment history (on-time rate, "
+                "average days late, risk level with reasons) and the backend's 30-day expected "
+                "collections forecast with at-risk invoices. Read-only."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "client": {
+                        "type": "string",
+                        "description": "Optional client name (or part of it) to filter by.",
+                    }
+                },
+                "required": [],
+            },
+        },
+    }
+)
