@@ -57,6 +57,8 @@ async def save_agent_run(
 ) -> None:
     """Persist an agent run, its proposed actions and the audit trail."""
     now = utc_now()
+    # Autopilot runs are authored by the system; chat runs by the AI agent.
+    author = AuditActor.AGENT if requested_by is AuditActor.USER else requested_by
     session.add(
         AgentRunRecord(
             id=result.run_id,
@@ -110,7 +112,7 @@ async def save_agent_run(
         record_event(
             session,
             event_type=AuditEventType.ACTION_PROPOSED,
-            actor=AuditActor.AGENT,
+            actor=author,
             run_id=result.run_id,
             action_id=proposal.id,
             invoice_id=proposal.invoice_id,
@@ -121,7 +123,7 @@ async def save_agent_run(
     record_event(
         session,
         event_type=AuditEventType.AGENT_RUN_COMPLETED,
-        actor=AuditActor.AGENT,
+        actor=author,
         run_id=result.run_id,
         message=f"Agent run finished with status '{result.status.value}' "
         f"({len(result.proposed_actions)} action(s) awaiting approval).",

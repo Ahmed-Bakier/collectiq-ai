@@ -57,6 +57,21 @@ class PayPalInvoiceDetail(PayPalModel):
     metadata: PayPalInvoiceMetadata | None = None
 
 
+class PayPalPaymentTransaction(PayPalModel):
+    """One payment recorded on an invoice (PayPal or external, e.g. bank transfer)."""
+
+    payment_id: str | None = None
+    payment_date: str | None = None  # "YYYY-MM-DD", parsed leniently by the services.
+    method: str | None = None
+    type: str | None = None
+    amount: PayPalMoney | None = None
+
+
+class PayPalPayments(PayPalModel):
+    paid_amount: PayPalMoney | None = None
+    transactions: list[PayPalPaymentTransaction] = []
+
+
 class PayPalInvoice(PayPalModel):
     id: str
     status: str
@@ -64,6 +79,7 @@ class PayPalInvoice(PayPalModel):
     primary_recipients: list[PayPalRecipient] = []
     amount: PayPalMoney | None = None
     due_amount: PayPalMoney | None = None
+    payments: PayPalPayments | None = None
 
 
 class PayPalInvoiceList(PayPalModel):

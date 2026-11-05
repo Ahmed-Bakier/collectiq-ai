@@ -56,6 +56,10 @@ class InvoiceService:
     def environment(self) -> str:
         return self._api.environment
 
+    @property
+    def api(self) -> PayPalInvoicesAPI:
+        return self._api
+
     async def list_invoices(self, page: int, page_size: int) -> InvoiceListResponse:
         result = await self._api.list_invoices(page=page, page_size=page_size)
         return InvoiceListResponse(
@@ -67,14 +71,18 @@ class InvoiceService:
             source=f"paypal_{self._api.environment}",
         )
 
-    async def list_all_invoices(self, max_pages: int = MAX_SCAN_PAGES) -> list[InvoiceSummary]:
-        """Fetch every invoice page (bounded by max_pages) for analysis."""
-        invoices: list[InvoiceSummary] = []
+    async def list_all_raw_invoices(self, max_pages: int = MAX_SCAN_PAGES) -> list[PayPalInvoice]:
+        """Fetch every invoice page (bounded by max_pages) as raw PayPal models."""
+        invoices: list[PayPalInvoice] = []
         page = 1
         while page <= max_pages:
             result = await self._api.list_invoices(page=page, page_size=MAX_PAGE_SIZE)
-            invoices.extend(to_invoice_summary(invoice) for invoice in result.items)
+            invoices.extend(result.items)
             if not result.items or result.total_pages is None or page >= result.total_pages:
                 break
             page += 1
         return invoices
+
+    async def list_all_invoices(self, max_pages: int = MAX_SCAN_PAGES) -> list[InvoiceSummary]:
+        """Fetch every invoice page (bounded by max_pages) for analysis."""
+        return [to_invoice_summary(invoice) for invoice in await self.list_all_raw_invoices(max_pages)]

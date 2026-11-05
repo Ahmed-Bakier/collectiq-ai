@@ -1,6 +1,8 @@
 """PayPal Invoicing v2 adapter."""
 
 import re
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from pydantic import ValidationError
@@ -133,3 +135,33 @@ class PayPalInvoicesAPI:
             ),
             request_id,
         )
+
+    async def record_payment(
+        self,
+        invoice_id: str,
+        request_id: str,
+        *,
+        amount: Decimal,
+        currency_code: str,
+        payment_date: date,
+        method: str = "BANK_TRANSFER",
+        note: str | None = None,
+    ) -> str | None:
+        """Record an external payment on a sent invoice. External write operation.
+
+        PayPal marks the invoice PAID when nothing is due, otherwise PARTIALLY_PAID.
+        """
+        body: dict[str, Any] = {
+            "method": method,
+            "payment_date": payment_date.isoformat(),
+            "amount": {"currency_code": currency_code, "value": f"{amount:.2f}"},
+        }
+        if note:
+            body["note"] = note
+        payload = await self._client.post(
+            f"{INVOICES_PATH}/{validate_invoice_id(invoice_id)}/payments",
+            body,
+            request_id,
+        )
+        payment_id = payload.get("payment_id") if isinstance(payload, dict) else None
+        return payment_id if isinstance(payment_id, str) else None
