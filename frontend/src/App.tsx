@@ -1,5 +1,7 @@
+import { lazy, Suspense } from "react";
 import { Route, Routes } from "react-router";
 import { AssistantProvider } from "./components/agent/AssistantContext";
+import { LoadingState } from "./components/common/ui";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ActivityPage } from "./pages/ActivityPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
@@ -7,6 +9,9 @@ import { AssistantPage } from "./pages/AssistantPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+
+// AG Grid is large, so the invoices page is loaded only when opened (separate chunk).
+const InvoicesPage = lazy(() => import("./pages/InvoicesPage").then((module) => ({ default: module.InvoicesPage })));
 
 export default function App() {
   return (
@@ -16,7 +21,11 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route
             path="invoices"
-            element={<PlaceholderPage title="Invoices" description="Searchable invoice table with filters." />}
+            element={
+              <Suspense fallback={<LoadingState label="Loading invoices…" />}>
+                <InvoicesPage />
+              </Suspense>
+            }
           />
           <Route path="assistant" element={<AssistantPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
