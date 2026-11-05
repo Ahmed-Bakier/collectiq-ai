@@ -93,14 +93,7 @@ def _label(action: ActionRecord) -> str:
 
 # ---------- Approval ----------
 
-async def approve_action(
-    session: AsyncSession,
-    action_id: str,
-    confirmed_hash: str,
-    *,
-    approved_by: AuditActor = AuditActor.USER,
-    policy: str | None = None,
-) -> ActionRecord:
+async def approve_action(session: AsyncSession, action_id: str, confirmed_hash: str) -> ActionRecord:
     action = await get_action(session, action_id)  # Also applies expiry.
     if action.approval_status != ApprovalStatus.PENDING.value:
         raise ConflictError(f"Only pending actions can be approved (current: {action.approval_status}).")
@@ -112,9 +105,8 @@ async def approve_action(
     action.approval_status = ApprovalStatus.APPROVED.value
     action.approved_parameters_hash = current_hash
     action.decided_at = utc_now()
-    who = "User approved" if approved_by is AuditActor.USER else f"Auto-approved by policy ({policy})"
-    _audit(session, action, AuditEventType.ACTION_APPROVED, approved_by,
-           f"{who}: {_label(action)}.", {"parameters_hash": current_hash, "policy": policy})
+    _audit(session, action, AuditEventType.ACTION_APPROVED, AuditActor.USER,
+           f"User approved {_label(action)}.", {"parameters_hash": current_hash})
     await session.commit()
     return action
 

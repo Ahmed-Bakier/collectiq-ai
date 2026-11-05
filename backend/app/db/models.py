@@ -7,7 +7,7 @@ CollectIQ proposed, what the user decided, and what was executed and verified.
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -77,16 +77,3 @@ class AuditEventRecord(Base):
     invoice_id: Mapped[str | None] = mapped_column(String(30), nullable=True)
     message: Mapped[str] = mapped_column(Text)
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-
-
-class AutopilotSettingsRecord(Base):
-    """Single-row table with the user's autopilot policy (id is always 1)."""
-
-    __tablename__ = "autopilot_settings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    auto_approve_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    auto_approve_max_amount: Mapped[str] = mapped_column(String(20), default="500.00")
-    last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utc_now)

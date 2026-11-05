@@ -49,12 +49,7 @@ async def _supersede_pending_duplicates(session: AsyncSession, proposal: Propose
         )
 
 
-async def save_agent_run(
-    session: AsyncSession,
-    user_message: str,
-    result: AgentRunResponse,
-    requested_by: AuditActor = AuditActor.USER,
-) -> None:
+async def save_agent_run(session: AsyncSession, user_message: str, result: AgentRunResponse) -> None:
     """Persist an agent run, its proposed actions and the audit trail."""
     now = utc_now()
     session.add(
@@ -71,9 +66,9 @@ async def save_agent_run(
     record_event(
         session,
         event_type=AuditEventType.AGENT_RUN_REQUESTED,
-        actor=requested_by,
+        actor=AuditActor.USER,
         run_id=result.run_id,
-        message=f"Request ({requested_by.value}): {user_message[:200]}",
+        message=f"User request: {user_message[:200]}",
     )
 
     for call in result.tool_calls:

@@ -333,7 +333,3 @@ async def execute_tool(context: AgentRunContext, name: str, raw_arguments: str) 
         result = {"error": "PayPal data is temporarily unavailable."}
 
     return _record(context, name, args.model_dump(mode="json"), result)
-
-
-# Public alias used by the autopilot playbook.
-build_proposal = _build_proposal
