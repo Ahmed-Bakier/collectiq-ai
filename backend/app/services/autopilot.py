@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.drafting import draft_from_facts
+from app.agent.drafting import UnsafeDraftError, draft_from_facts
 from app.agent.llm import LLM, LLMError
 from app.agent.tools import ProposeActionArgs, build_proposal
 from app.core.config import get_settings
@@ -347,6 +347,15 @@ class AutopilotService:
             }
             try:
                 return await draft_from_facts(self._llm, facts, tone, "en"), False
+            except UnsafeDraftError as exc:
+                record_event(
+                    self._session,
+                    event_type=AuditEventType.AI_OUTPUT_BLOCKED,
+                    actor=AuditActor.SYSTEM,
+                    invoice_id=item.invoice.id,
+                    message="AI draft blocked by the message safety check; a template was used instead.",
+                    details={"violations": exc.violations},
+                )
             except LLMError:
                 logger.warning("Autopilot drafting failed; using a template message.")
         return fallback_message(item, action_type, tone), True

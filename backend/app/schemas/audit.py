@@ -31,6 +31,7 @@ class AuditEventType(StrEnum):
     VERIFICATION_COMPLETED = "verification_completed"
     AUTOPILOT_RUN_COMPLETED = "autopilot_run_completed"
     AUTOPILOT_SETTINGS_CHANGED = "autopilot_settings_changed"
+    AI_OUTPUT_BLOCKED = "ai_output_blocked"
 
 
 class AuditEventResponse(BaseModel):
