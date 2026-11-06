@@ -116,3 +116,14 @@ def test_safety_report_shows_live_evidence() -> None:
     assert counts["executions_without_approval"] == 0
     assert len(report["guardrails"]) >= 8
     assert any("payment" in rule for rule in report["message_rules"])
+
+
+def test_check_message_endpoint() -> None:
+    client = TestClient(app)
+
+    blocked = client.post("/api/safety/check-message", json={"text": UNSAFE_MESSAGE}).json()
+    assert blocked["passed"] is False
+    assert any(violation.startswith("payment_redirect") for violation in blocked["violations"])
+
+    passed = client.post("/api/safety/check-message", json={"text": SAFE_MESSAGE}).json()
+    assert passed == {"passed": True, "violations": []}

@@ -15,6 +15,7 @@ from app.db.session import get_session
 from app.schemas.agent import AgentRunRequest, AgentRunResponse
 from app.services.actions import save_agent_run
 from app.services.invoices import InvoiceService
+from app.services.reminders import last_reminders
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -28,7 +29,13 @@ async def create_agent_run(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> AgentRunResponse:
     """Run the collection agent. Proposed actions are stored, never executed here."""
-    agent = CollectionAgent(llm, service, today=today, timezone=get_settings().business_timezone)
+    agent = CollectionAgent(
+        llm,
+        service,
+        today=today,
+        timezone=get_settings().business_timezone,
+        last_reminders=await last_reminders(session),
+    )
     result = await agent.run(request.message)
     await save_agent_run(session, request.message, result)
     return result

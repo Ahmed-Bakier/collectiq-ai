@@ -8,12 +8,13 @@ import json
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.agent.message_guard import check_message
+from app.db.types import utc_now
 from app.integrations.paypal.exceptions import PayPalError
 from app.integrations.paypal.invoices import INVOICE_ID_PATTERN
 from app.schemas.agent import ProposedAction, ProposedActionType, ToolCallRecord
@@ -27,6 +28,7 @@ from app.schemas.insights import ClientInsight, InsightsResponse
 from app.services.client_insights import ClientInsightsService
 from app.services.invoice_analysis import analyze_invoices, collectible_amount
 from app.services.invoices import InvoiceService
+from app.services.reminders import REMINDER_COOLDOWN
 
 # Which backend suggestion permits which proposal. Anything else is rejected.
 ALLOWED_PROPOSALS: dict[SuggestedAction, ProposedActionType] = {
@@ -47,6 +49,7 @@ class AgentRunContext:
     proposals: list[ProposedAction] = field(default_factory=list)
     tool_records: list[ToolCallRecord] = field(default_factory=list)
     insights: InsightsResponse | None = None
+    last_reminders: dict[str, datetime] = field(default_factory=dict)
 
     async def get_analysis(self) -> InvoiceAnalysisResponse:
         """Load PayPal invoices and analyze them once per run."""
@@ -91,7 +94,7 @@ class ProposeActionArgs(StrictArgs):
 
 # ---------- Tool handlers ----------
 
-def _compact(item: AnalyzedInvoice) -> dict[str, Any]:
+def _compact(item: AnalyzedInvoice, last_reminder: datetime | None = None) -> dict[str, Any]:
     invoice = item.invoice
     amount = collectible_amount(invoice)
     return {
@@ -110,6 +113,7 @@ def _compact(item: AnalyzedInvoice) -> dict[str, Any]:
         "priority_level": item.priority_level.value,
         "suggested_action": item.suggested_action.value,
         "reasons": item.reasons,
+        "last_reminder_sent_at": last_reminder.isoformat() if last_reminder else None,
     }
 
 
@@ -124,7 +128,7 @@ async def _get_invoice_analysis(context: AgentRunContext, args: AnalysisArgs) ->
         "as_of": analysis.as_of.isoformat(),
         "timezone": analysis.timezone,
         "summary": analysis.summary.model_dump(mode="json"),
-        "invoices": [_compact(item) for item in items],
+        "invoices": [_compact(item, context.last_reminders.get(item.invoice.id)) for item in items],
     }
 
 
@@ -133,7 +137,7 @@ async def _get_invoice_details(context: AgentRunContext, args: InvoiceDetailsArg
     item = context.find(args.invoice_id)
     if item is None:
         return {"error": f"Invoice {args.invoice_id} was not found in PayPal data."}
-    return _compact(item)
+    return _compact(item, context.last_reminders.get(item.invoice.id))
 
 
 def _build_proposal(item: AnalyzedInvoice, args: ProposeActionArgs) -> ProposedAction:
@@ -191,6 +195,10 @@ async def _propose_action(context: AgentRunContext, args: ProposeActionArgs) -> 
     )
     if duplicate:
         return {"accepted": False, "error": "This action was already proposed in this run."}
+
+    cooldown_error = _reminder_cooldown_error(context, args)
+    if cooldown_error:
+        return {"accepted": False, "error": cooldown_error}
 
     violations = check_message(args.message_to_client)
     if violations:
@@ -448,3 +456,18 @@ TOOL_DEFINITIONS.append(
         },
     }
 )
+
+
+# ---------- Reminder cooldown (anti-spam) ----------
+
+def _reminder_cooldown_error(context: AgentRunContext, args: ProposeActionArgs) -> str | None:
+    """Reminders for the same invoice must be at least REMINDER_COOLDOWN apart."""
+    if args.action_type is not ProposedActionType.SEND_REMINDER:
+        return None
+    last = context.last_reminders.get(args.invoice_id)
+    if last is None or utc_now() - last >= REMINDER_COOLDOWN:
+        return None
+    return (
+        f"A reminder for this invoice was already sent on {last.date().isoformat()}. "
+        f"Wait at least {REMINDER_COOLDOWN.days} days between reminders."
+    )

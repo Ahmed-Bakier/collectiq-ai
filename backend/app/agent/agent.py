@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from app.agent.llm import LLM
@@ -20,17 +20,26 @@ INCOMPLETE_SUMMARY = (
 
 
 class CollectionAgent:
-    def __init__(self, llm: LLM, invoice_service: InvoiceService, today: date, timezone: str) -> None:
+    def __init__(
+        self,
+        llm: LLM,
+        invoice_service: InvoiceService,
+        today: date,
+        timezone: str,
+        last_reminders: dict[str, datetime] | None = None,
+    ) -> None:
         self._llm = llm
         self._invoice_service = invoice_service
         self._today = today
         self._timezone = timezone
+        self._last_reminders = last_reminders or {}
 
     async def run(self, user_message: str) -> AgentRunResponse:
         context = AgentRunContext(
             invoice_service=self._invoice_service,
             today=self._today,
             timezone=self._timezone,
+            last_reminders=self._last_reminders,
         )
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": build_system_prompt(self._today, self._timezone)},
