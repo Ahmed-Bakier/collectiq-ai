@@ -256,3 +256,38 @@ export interface InsightsResponse {
   clients: ClientInsight[];
   forecast: CashFlowForecast;
 }
+
+// ---------- Safety ----------
+
+export interface SafetyCounts {
+  agent_runs: number;
+  autopilot_runs: number;
+  tool_calls: number;
+  tool_calls_rejected: number;
+  ai_messages_blocked: number;
+  proposals: number;
+  approved_by_user: number;
+  approved_by_policy: number;
+  rejected_by_user: number;
+  executions_succeeded: number;
+  executions_blocked: number;
+  verified_in_paypal: number;
+  executions_without_approval: number;
+}
+
+export interface Guardrail {
+  name: string;
+  description: string;
+}
+
+export interface SafetyReport {
+  generated_at: string;
+  counts: SafetyCounts;
+  guardrails: Guardrail[];
+  message_rules: string[];
+}
+
+export interface MessageCheckResult {
+  passed: boolean;
+  violations: string[];
+}

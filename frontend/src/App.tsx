@@ -11,6 +11,7 @@ import { ClientsPage } from "./pages/ClientsPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { SafetyPage } from "./pages/SafetyPage";
 
 // AG Grid is large, so the invoices page is loaded only when opened (separate chunk).
 const InvoicesPage = lazy(() => import("./pages/InvoicesPage").then((module) => ({ default: module.InvoicesPage })));
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="autopilot" element={<AutopilotPage />} />
           <Route path="approvals" element={<ApprovalsPage />} />
           <Route path="activity" element={<ActivityPage />} />
+          <Route path="safety" element={<SafetyPage />} />
           <Route path="integrations" element={<IntegrationsPage />} />
           <Route path="*" element={<PlaceholderPage title="Page not found" description="This page does not exist." />} />
         </Route>

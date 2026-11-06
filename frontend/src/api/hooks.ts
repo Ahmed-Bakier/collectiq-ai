@@ -10,7 +10,9 @@ import type {
   AuditEvent,
   InsightsResponse,
   InvoiceAnalysisResponse,
+  MessageCheckResult,
   PayPalStatus,
+  SafetyReport,
 } from "./types";
 
 export function useInvoiceAnalysis() {
@@ -167,5 +169,22 @@ export function useInsights() {
     queryKey: ["insights"],
     queryFn: () => apiFetch<InsightsResponse>("/insights"),
     staleTime: 60_000,
+  });
+}
+
+// ---------- Safety ----------
+
+export function useSafetyReport() {
+  return useQuery({
+    queryKey: ["safety"],
+    queryFn: () => apiFetch<SafetyReport>("/safety"),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useCheckMessage() {
+  return useMutation({
+    mutationFn: (text: string) =>
+      apiFetch<MessageCheckResult>("/safety/check-message", { method: "POST", body: JSON.stringify({ text }) }),
   });
 }

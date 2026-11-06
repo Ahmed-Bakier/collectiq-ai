@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Guardrail(BaseModel):
@@ -31,3 +31,14 @@ class SafetyReport(BaseModel):
     counts: SafetyCounts
     guardrails: list[Guardrail]
     message_rules: list[str]
+
+
+class MessageCheckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class MessageCheckResponse(BaseModel):
+    passed: bool
+    violations: list[str]

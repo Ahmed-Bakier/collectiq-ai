@@ -158,3 +158,44 @@ def test_client_insights_filter_reports_unknown_client() -> None:
 
     assert result.tool_calls[0].status == "error"
     assert "No client matching" in result.tool_calls[0].detail
+
+
+def _reminder_run(hours_since_last_reminder: float) -> tuple[AgentRunResponse, ScriptedLLM]:
+    from datetime import timedelta
+
+    from app.db.types import utc_now
+
+    llm = ScriptedLLM(
+        [
+            tool_call("get_invoice_analysis", {}),
+            tool_call(
+                "propose_action",
+                {"invoice_id": OVERDUE_ID, "action_type": "send_reminder", "reason": "Overdue"},
+                call_id="call_2",
+            ),
+            final_answer("done"),
+        ]
+    )
+    agent = CollectionAgent(
+        llm,
+        make_service(),
+        today=TODAY,
+        timezone="America/Los_Angeles",
+        last_reminders={OVERDUE_ID: utc_now() - timedelta(hours=hours_since_last_reminder)},
+    )
+    return asyncio.run(agent.run("Remind overdue clients")), llm
+
+
+def test_agent_cannot_repeat_a_recent_reminder() -> None:
+    result, llm = _reminder_run(hours_since_last_reminder=5)
+
+    assert result.proposed_actions == []
+    assert "already sent" in result.tool_calls[1].detail
+    tool_messages = [message for message in llm.received[1] if message["role"] == "tool"]
+    assert '"last_reminder_sent_at": "' in tool_messages[0]["content"]
+
+
+def test_agent_can_remind_again_after_cooldown() -> None:
+    result, _ = _reminder_run(hours_since_last_reminder=4 * 24)
+
+    assert len(result.proposed_actions) == 1
