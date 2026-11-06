@@ -4,11 +4,14 @@ import asyncio
 import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_exception_handlers
+from app.api.frontend import mount_frontend
+from app.api.rate_limit import ai_rate_limit_middleware
 from app.api.routes import actions, agent, audit, autopilot, health, insights, integrations, invoices, safety
 from app.core.config import get_settings
 from app.db.session import init_db
@@ -33,9 +36,9 @@ def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
 
-    app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
 
-    # Allow only the configured frontend origin.
+    # Allow only the configured frontend origin (same origin in production).
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.frontend_origin],
@@ -43,6 +46,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.middleware("http")(ai_rate_limit_middleware)
 
     register_exception_handlers(app)
 
@@ -58,6 +62,12 @@ def create_app() -> FastAPI:
         safety.router,
     ):
         app.include_router(router, prefix="/api")
+
+    # Production: serve the built frontend from the same origin (after all API routes).
+    if settings.frontend_dist_dir:
+        dist = Path(settings.frontend_dist_dir)
+        if (dist / "index.html").is_file():
+            mount_frontend(app, dist)
     return app
 
 
