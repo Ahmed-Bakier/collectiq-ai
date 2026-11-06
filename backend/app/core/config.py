@@ -50,6 +50,15 @@ class Settings(BaseSettings):
     # Background autopilot schedule in minutes (0 = disabled; use "Run now" instead).
     autopilot_interval_minutes: int = 0
 
+    # Optional second model on the same provider, used once when the primary hits a rate limit or error.
+    llm_fallback_model: str | None = None
+
+    # Max AI requests (assistant, autopilot, AI rewrite) per client IP per hour; 0 = unlimited.
+    ai_rate_limit_per_hour: int = 0
+
+    # Built frontend (Vite dist) served by the backend in production; unset in development.
+    frontend_dist_dir: str | None = None
+
     @property
     def paypal_credentials_configured(self) -> bool:
         """Return True when real (non-placeholder) PayPal credentials are present."""

@@ -66,10 +66,12 @@ class OpenAICompatibleLLM:
         settings: Settings,
         http_client: httpx.AsyncClient | None = None,
         max_retries: int = 2,
+        model: str | None = None,
     ) -> None:
         if not settings.llm_configured:
             raise LLMNotConfiguredError("LLM API key is not configured.")
         self._settings = settings
+        self._model = model or settings.llm_model
         self._client = AsyncOpenAI(
             api_key=settings.llm_api_key.get_secret_value(),
             base_url=settings.llm_base_url,
@@ -80,7 +82,7 @@ class OpenAICompatibleLLM:
 
     @property
     def model(self) -> str:
-        return self._settings.llm_model
+        return self._model
 
     async def complete(
         self,
@@ -126,3 +128,33 @@ class OpenAICompatibleLLM:
             tool_calls=tool_calls,
             raw_message=message.model_dump(exclude_none=True),
         )
+
+
+class FallbackLLM:
+    """Uses the primary model; on a rate limit or provider error, retries once with the fallback model."""
+
+    def __init__(self, primary: LLM, fallback: LLM) -> None:
+        self._primary = primary
+        self._fallback = fallback
+
+    @property
+    def model(self) -> str:
+        return self._primary.model
+
+    async def complete(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> LLMResponse:
+        try:
+            return await self._primary.complete(messages, tools)
+        except LLMNotConfiguredError:
+            raise
+        except LLMError as exc:
+            logger.warning(
+                "Primary model %s failed (%s); retrying once with fallback model %s.",
+                self._primary.model,
+                type(exc).__name__,
+                self._fallback.model,
+            )
+            return await self._fallback.complete(messages, tools)
