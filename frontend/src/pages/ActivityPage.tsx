@@ -32,6 +32,8 @@ const EVENT_LABELS: Record<string, string> = {
   autopilot_run_completed: "Autopilot run",
   autopilot_settings_changed: "Autopilot settings changed",
   ai_output_blocked: "AI message blocked",
+  payment_received: "Payment received",
+  webhook_received: "PayPal event",
 };
 
 const EVENT_TONES: Record<string, string> = {

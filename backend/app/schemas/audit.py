@@ -32,6 +32,8 @@ class AuditEventType(StrEnum):
     AUTOPILOT_RUN_COMPLETED = "autopilot_run_completed"
     AUTOPILOT_SETTINGS_CHANGED = "autopilot_settings_changed"
     AI_OUTPUT_BLOCKED = "ai_output_blocked"
+    PAYMENT_RECEIVED = "payment_received"
+    WEBHOOK_RECEIVED = "webhook_received"
 
 
 class AuditEventResponse(BaseModel):

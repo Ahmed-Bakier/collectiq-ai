@@ -90,3 +90,14 @@ class AutopilotSettingsRecord(Base):
     auto_approve_max_amount: Mapped[str] = mapped_column(String(20), default="500.00")
     last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utc_now)
+
+
+class WebhookEventRecord(Base):
+    """PayPal webhook events already processed (idempotency: each event is handled once)."""
+
+    __tablename__ = "webhook_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(80))
+    resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utc_now)
