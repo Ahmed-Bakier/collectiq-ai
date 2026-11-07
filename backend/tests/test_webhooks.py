@@ -112,3 +112,29 @@ def test_webhooks_require_configuration(monkeypatch: pytest.MonkeyPatch) -> None
 
     assert response.status_code == 503
     assert verify_calls == []
+
+
+def test_nested_invoice_resource_is_supported(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, book, _ = setup(monkeypatch)
+    mark_paid(book)
+    event = {
+        "id": "WH-EVENT-NESTED",
+        "event_type": "INVOICING.INVOICE.PAID",
+        "resource": {"invoice": {"id": INVOICE_ID, "status": "MARKED_AS_PAID"}},
+    }
+
+    assert post(client, event).json()["status"] == "processed"
+    events = client.get("/api/audit?limit=200").json()["items"]
+    assert any(event["event_type"] == "payment_received" for event in events)
+
+
+def test_event_without_invoice_is_audited_and_can_be_resent(monkeypatch: pytest.MonkeyPatch) -> None:
+    client, _, verify_calls = setup(monkeypatch)
+    event = {"id": "WH-EVENT-OTHER", "event_type": "INVOICING.INVOICE.PAID", "resource": {"id": "EXTR-9CC658752N528561N"}}
+
+    assert post(client, event).json()["status"] == "ignored"
+    assert post(client, event).json()["status"] == "ignored"  # Not stored as processed: a resend is handled again.
+    assert len(verify_calls) == 2
+    events = client.get("/api/audit?limit=200").json()["items"]
+    trace = next(event for event in events if event["event_type"] == "webhook_received")
+    assert "without an invoice reference" in trace["message"]
