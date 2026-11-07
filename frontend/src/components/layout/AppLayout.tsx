@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router";
 import { Bot, FileText, History, LayoutDashboard, Lock, Plug, ShieldCheck, Sparkles, Users, type LucideIcon } from "lucide-react";
 import { usePayPalStatus } from "../../api/hooks";
+import { PaymentNotifier } from "./PaymentNotifier";
 
 interface NavItem {
   to: string;
@@ -54,6 +55,7 @@ export function AppLayout() {
         </nav>
 
         <ConnectionFooter />
+        <PaymentNotifier />
       </aside>
 
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
