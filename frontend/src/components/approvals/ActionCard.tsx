@@ -13,6 +13,7 @@ import {
 import type { ActionRecord } from "../../api/types";
 import { formatDateTime, formatMoney } from "../../lib/format";
 import { ErrorState, LoadingState } from "../common/ui";
+import { PaymentLinkPanel } from "./PaymentLinkPanel";
 
 const ACTION_TITLES: Record<ActionRecord["action_type"], string> = {
   send_invoice: "Send invoice via PayPal",
@@ -82,6 +83,9 @@ export function ActionCard({ action, onReplaced }: { action: ActionRecord; onRep
   const isPending = action.approval_status === "pending";
   const canExecute = action.approval_status === "approved" && action.execution_status === "not_started";
   const status = statusInfo(action);
+  const shareable =
+    (action.action_type === "send_reminder" && (isPending || action.approval_status === "approved")) ||
+    action.execution_status === "succeeded";
   const Icon = action.action_type === "send_invoice" ? Send : BellRing;
 
   function saveEdit() {
@@ -231,6 +235,8 @@ export function ActionCard({ action, onReplaced }: { action: ActionRecord; onRep
         </details>
 
         <Outcome action={action} />
+
+        {shareable && <PaymentLinkPanel invoiceId={action.invoice_id} message={action.message_to_client} />}
 
         {mutationError && (
           <p role="alert" className="flex items-start gap-2 rounded-lg bg-danger/5 p-3 text-xs text-danger">

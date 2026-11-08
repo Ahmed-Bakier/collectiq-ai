@@ -47,6 +47,7 @@ class PayPalInvoiceMetadata(PayPalModel):
     last_update_time: datetime | None = None
     first_sent_time: datetime | None = None
     last_sent_time: datetime | None = None
+    recipient_view_url: str | None = None  # PayPal-hosted page where the client views and pays.
 
 
 class PayPalInvoiceDetail(PayPalModel):
