@@ -11,6 +11,7 @@ import type {
   InsightsResponse,
   InvoiceAnalysisResponse,
   MessageCheckResult,
+  PaymentLinkResponse,
   PayPalStatus,
   SafetyReport,
 } from "./types";
@@ -186,5 +187,17 @@ export function useCheckMessage() {
   return useMutation({
     mutationFn: (text: string) =>
       apiFetch<MessageCheckResult>("/safety/check-message", { method: "POST", body: JSON.stringify({ text }) }),
+  });
+}
+
+// ---------- Payment links (read-only) ----------
+
+export function usePaymentLink(invoiceId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["payment-link", invoiceId],
+    queryFn: () => apiFetch<PaymentLinkResponse>(`/invoices/${invoiceId}/payment-link`),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
 }

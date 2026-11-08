@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.errors import register_exception_handlers
 from app.api.frontend import mount_frontend
 from app.api.rate_limit import ai_rate_limit_middleware
-from app.api.routes import actions, agent, audit, autopilot, health, insights, integrations, invoices, safety, webhooks
+from app.api.routes import actions, agent, audit, autopilot, health, insights, integrations, invoices, payment_links, safety, webhooks
 from app.core.config import get_settings
 from app.db.session import init_db
 from app.services.autopilot import autopilot_scheduler
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
         health.router,
         integrations.router,
         invoices.router,
+        payment_links.router,
         agent.router,
         actions.router,
         audit.router,

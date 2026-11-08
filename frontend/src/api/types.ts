@@ -291,3 +291,16 @@ export interface MessageCheckResult {
   passed: boolean;
   violations: string[];
 }
+
+// ---------- Payment links ----------
+
+export interface PaymentLinkResponse {
+  invoice_id: string;
+  invoice_number: string | null;
+  client: string;
+  status: string;
+  amount_due: string | null;
+  currency_code: string | null;
+  pay_url: string;
+  qr_svg_data_uri: string;
+}
