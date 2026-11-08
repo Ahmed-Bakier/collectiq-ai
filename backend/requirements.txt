@@ -7,3 +7,4 @@ openai>=1.60
 sqlalchemy[asyncio]>=2.0
 aiosqlite>=0.20
 segno>=1.6
+mcp>=1.10,<2
