@@ -12,31 +12,46 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.errors import register_exception_handlers
 from app.api.frontend import mount_frontend
 from app.api.rate_limit import ai_rate_limit_middleware
-from app.api.routes import actions, agent, audit, autopilot, health, insights, integrations, invoices, payment_links, safety, webhooks
+from app.api.routes import (
+    actions,
+    agent,
+    audit,
+    autopilot,
+    health,
+    insights,
+    integrations,
+    invoices,
+    payment_links,
+    safety,
+    webhooks,
+)
 from app.core.config import get_settings
 from app.db.session import init_db
+from app.mcp_server import BearerTokenAuth, build_mcp_server
 from app.services.autopilot import autopilot_scheduler
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    await init_db()
-    interval = get_settings().autopilot_interval_minutes
-    scheduler: asyncio.Task[None] | None = None
-    if interval > 0:
-        scheduler = asyncio.create_task(autopilot_scheduler(interval))
-    yield
-    if scheduler is not None:
-        scheduler.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await scheduler
 
 
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
     settings = get_settings()
+    mcp = build_mcp_server()
+    mcp_app = mcp.streamable_http_app()
 
-    app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        await init_db()
+        interval = get_settings().autopilot_interval_minutes
+        scheduler: asyncio.Task[None] | None = None
+        if interval > 0:
+            scheduler = asyncio.create_task(autopilot_scheduler(interval))
+        async with mcp.session_manager.run():
+            yield
+        if scheduler is not None:
+            scheduler.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await scheduler
+
+    app = FastAPI(title=settings.app_name, version="1.1.0", lifespan=lifespan)
 
     # Allow only the configured frontend origin (same origin in production).
     app.add_middleware(
@@ -64,6 +79,9 @@ def create_app() -> FastAPI:
         webhooks.router,
     ):
         app.include_router(router, prefix="/api")
+
+    # MCP server for other AI agents (read + propose only), behind a bearer token.
+    app.mount("/mcp", BearerTokenAuth(mcp_app))
 
     # Production: serve the built frontend from the same origin (after all API routes).
     if settings.frontend_dist_dir:

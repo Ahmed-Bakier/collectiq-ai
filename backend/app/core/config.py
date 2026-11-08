@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # Webhook ID from the PayPal Developer Dashboard (needed to verify webhook signatures).
     paypal_webhook_id: str | None = None
 
+    # Bearer token required by the MCP server at /mcp/ (empty = MCP server disabled).
+    mcp_api_token: SecretStr = SecretStr("")
+
     # AI provider (any OpenAI-compatible Chat Completions API).
     llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     llm_model: str = "gemini-3.6-flash"
