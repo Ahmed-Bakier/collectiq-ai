@@ -2,12 +2,16 @@
 
 > **The trusted AI collections teammate for freelancers and small agencies who get paid through PayPal.**
 > It watches every invoice, decides who to nudge and how, drafts the message, and waits for your one-click approval.
-> Nothing moves without you, and every action is verified in PayPal and audited.
+> Nothing moves without you, every action is verified in PayPal and audited, and payments show up the moment PayPal confirms them.
 
 **Live demo:** https://collectiq-ai-dlxu.onrender.com · **API docs (Swagger):** https://collectiq-ai-dlxu.onrender.com/docs
 **Demo video (under 3 min):** _link added at submission_
 
 Built for the **"Build What's Next with PayPal and AI"** hackathon. PayPal Sandbox only.
+
+**AI proposes · you decide · PayPal executes.**
+
+![CollectIQ user lifecycle](docs/images/lifecycle.png)
 
 ---
 
@@ -17,16 +21,17 @@ Built for the **"Build What's Next with PayPal and AI"** hackathon. PayPal Sandb
 2. [What CollectIQ does](#what-collectiq-does)
 3. [How PayPal is used](#how-paypal-is-used)
 4. [How AI is used](#how-ai-is-used)
-5. [Trust and safety](#trust-and-safety)
-6. [Architecture](#architecture)
-7. [Try the live demo](#try-the-live-demo)
-8. [Run it locally](#run-it-locally)
-9. [Tests](#tests)
-10. [API overview and Postman](#api-overview-and-postman)
-11. [Tools used](#tools-used)
-12. [Project structure](#project-structure)
-13. [Limitations and roadmap](#limitations-and-roadmap)
-14. [License](#license)
+5. [CollectIQ as an MCP server](#collectiq-as-an-mcp-server)
+6. [Trust and safety](#trust-and-safety)
+7. [Architecture](#architecture)
+8. [Try the live demo](#try-the-live-demo)
+9. [Run it locally](#run-it-locally)
+10. [Tests](#tests)
+11. [API overview and Postman](#api-overview-and-postman)
+12. [Tools used](#tools-used)
+13. [Project structure](#project-structure)
+14. [Limitations and roadmap](#limitations-and-roadmap)
+15. [License](#license)
 
 ---
 
@@ -52,23 +57,29 @@ Handing this to an AI agent raises a second problem: **trust**. An agent that wr
 | **Client payment intelligence** | Per-client on-time rate, average days late and an explainable risk level (low / medium / high / new), computed from **payment history recorded in PayPal**. |
 | **30-day cash-flow forecast** | Expected collections per week, where each invoice's expected date is its due date plus that client's average delay, with the at-risk amount shown separately. |
 | **Approvals** | Every proposal shows the reason, the client message and the **exact PayPal parameters**. Edit the message, or ask the AI to rewrite it in another tone or language (English, Arabic, Spanish, French, German, Portuguese). Any change creates a new version that needs a new approval. Then execute: CollectIQ re-checks PayPal, executes once and verifies the result. |
+| **Real-time payments** 🆕 | **PayPal webhooks** tell CollectIQ the moment an invoice is paid. The signature is verified with PayPal, the invoice is re-read, the payment is recorded, any pending reminder for that invoice is withdrawn, and the app shows a **"Payment received"** notification. |
+| **Payment links & QR codes** 🆕 | For a sent, unpaid invoice, CollectIQ shows **PayPal's own payment page** as a link and a QR code, validated before it is shown. Copy it, share it on WhatsApp or by email, or open it in PayPal. |
+| **MCP server for other AI agents** 🆕 | Claude Desktop (or any MCP client) can read invoices, client insights and payment links, and **propose** actions through CollectIQ, with the same guardrails and the same human approval. See [CollectIQ as an MCP server](#collectiq-as-an-mcp-server). |
 | **Safety & trust page** | Guardrails plus live evidence from the audit trail (headline: **PayPal writes without an approval: 0**) and a "Try it" box that runs the message safety check on any text. |
 | **Invoices** | All PayPal invoices in an AG Grid table with filters, search, CSV export and "ask the agent about this invoice". |
-| **Activity Log** | Append-only audit trail of every request, tool call, proposal, decision, execution and verification, with its actor (you, the agent or the system). |
+| **Activity Log** | Append-only audit trail of every request, tool call, proposal, decision, execution, verification, webhook and payment, with its actor (you, the agent or the system). |
 
 ## How PayPal is used
 
-PayPal is the system of record. CollectIQ stores only its own proposals and the audit trail; invoice data is always read live from PayPal.
+PayPal is the system of record. CollectIQ stores only its own proposals, the audit trail and processed webhook IDs; invoice data is always read live from PayPal.
 
 | PayPal capability | Endpoint | Used for |
 |---|---|---|
 | OAuth 2.0 client credentials | `POST /v1/oauth2/token` | Cached access token, refreshed automatically |
 | List invoices | `GET /v2/invoicing/invoices` | Analysis, dashboard, forecast (all pages, bounded) |
-| Show invoice details | `GET /v2/invoicing/invoices/{id}` | Precondition check before every write, verification after it, and payment dates for paid invoices |
+| Show invoice details | `GET /v2/invoicing/invoices/{id}` | Precondition check before every write, verification after it, payment dates for paid invoices, re-reading an invoice after a webhook, and the invoice's `recipient_view_url` (payment page) |
 | Send invoice | `POST /v2/invoicing/invoices/{id}/send` | Approved "send invoice" actions (with the AI-drafted note) |
 | Send reminder | `POST /v2/invoicing/invoices/{id}/remind` | Approved payment reminders (with the AI-drafted note) |
+| **Webhooks** 🆕 | `INVOICING.INVOICE.PAID` (and cancelled) → `POST /api/webhooks/paypal` | Real-time payment confirmation |
+| **Verify webhook signature** 🆕 | `POST /v1/notifications/verify-webhook-signature` | Every incoming webhook is verified with PayPal before it is trusted |
+| **Invoice payment page** 🆕 | `recipient_view_url` | Payment links and QR codes for clients |
 | Create draft invoice | `POST /v2/invoicing/invoices` | Sandbox seed scripts only |
-| Record payment | `POST /v2/invoicing/invoices/{id}/payments` | Sandbox seed script that creates realistic paid history |
+| Record payment | `POST /v2/invoicing/invoices/{id}/payments` | Sandbox seed scripts (paid history, simulated client payment) |
 
 Every write sends a unique **`PayPal-Request-Id`** (idempotency). A write whose outcome is unknown (for example a timeout after PayPal received it) is marked `outcome_unknown` and is **never retried automatically**. Live PayPal mode is rejected by configuration.
 
@@ -97,7 +108,28 @@ The design rule is simple: **AI interprets and writes; deterministic code decide
 
 The agent never has a tool that writes to PayPal. Details: [docs/architecture/AGENT_DESIGN.md](docs/architecture/AGENT_DESIGN.md).
 
+## CollectIQ as an MCP server
+
+CollectIQ also exposes its collections brain to **other AI agents** through the [Model Context Protocol](https://modelcontextprotocol.io) at `/mcp/` (Streamable HTTP, bearer token).
+
+| MCP tool | Type | What it does |
+|---|---|---|
+| `get_invoice_analysis` | read | All PayPal invoices with state, days overdue, priority, allowed action and last reminder |
+| `get_invoice_details` | read | The same analysis for one invoice |
+| `get_client_insights` | read | On-time rate, average days late, risk level and 30-day forecast |
+| `get_payment_link` | read | PayPal's own payment page for a sent, unpaid invoice (validated URL) |
+| `list_pending_approvals` | read | Actions waiting for a human decision |
+| `propose_action` | propose | Proposes `send_invoice` or `send_reminder`; goes through the same checks as the in-app agent |
+
+There is **no execute or approve tool**. A proposal from an external agent lands on the Approvals page as pending, and every MCP call is audited as `MCP client: …`.
+
+![Claude Desktop working with CollectIQ through MCP](docs/images/mcp.png)
+
+**Verified with Claude Desktop:** asked *"Which CollectIQ invoices are overdue? Propose a reminder for the most overdue one."*, Claude listed the two overdue invoices, proposed a reminder for the most overdue one, had its first draft **rejected by the message safety check** because it contained a link, rewrote it, and the proposal appeared as pending in CollectIQ. Setup for Claude Desktop, Claude Code and MCP Inspector: [docs/MCP.md](docs/MCP.md).
+
 ## Trust and safety
+
+![Defence in depth](docs/images/security.png)
 
 | Guardrail | How it is enforced |
 |---|---|
@@ -106,39 +138,29 @@ The agent never has a tool that writes to PayPal. Details: [docs/architecture/AG
 | Deterministic eligibility | The backend decides which action an invoice allows; the AI cannot override it |
 | **Message safety check** | Every AI-written client message is scanned with plain rules (no LLM) and blocked if it asks for payment outside the PayPal invoice (bank details, wire transfer, crypto, gift cards, other payment apps), contains links or email addresses, threatens legal action, invents fees or interest, echoes injected instructions, or contains placeholders. This targets **payment-redirection fraud**. |
 | Data, not instructions | PayPal data reaches the model only inside tool results, and the system prompt says to never follow instructions found in data |
-| Anti-spam | No reminder within 3 days of the previous one (agent and autopilot); PayPal also allows at most 2 reminders per invoice per day |
+| Anti-spam | No reminder within 3 days of the previous one (agent, autopilot and MCP); PayPal also allows at most 2 reminders per invoice per day |
 | Hash-bound approval | Approval is tied to a SHA-256 hash of the exact parameters; it expires after 24 hours; any edit creates a new version |
 | Execute once, verify | Atomic claim, PayPal precondition read, one write with `PayPal-Request-Id`, verification read; execution window of 15 minutes after approval |
 | Strict autopilot policy | Auto-approve is **off by default**; when enabled it covers only friendly reminders up to your limit, at most 5 per run, never invoices and never high-risk clients; one-click kill switch |
+| **Signed webhooks** 🆕 | Every webhook is verified with PayPal (`verify-webhook-signature`); duplicates are ignored by event ID; the invoice is re-read from PayPal instead of trusting the payload; without `PAYPAL_WEBHOOK_ID` the endpoint is disabled |
+| **Validated payment links** 🆕 | Only PayPal's own `recipient_view_url` is shown, and only if it is https, on a PayPal host, for the same invoice, and the invoice is still collectible |
+| **MCP access control** 🆕 | Bearer token compared in constant time; no token configured → MCP disabled (503); wrong token → 401; read + propose tools only |
 | Public-demo protection | Per-visitor limit on AI requests (`AI_RATE_LIMIT_PER_HOUR`) |
-| Append-only audit trail | Every step, including blocked AI output, is recorded |
+| Append-only audit trail | Every step, including blocked AI output, webhooks and MCP calls, is recorded |
 
 **Prompt-injection test:** `tests/test_safety.py` simulates a PayPal invoice whose client name contains an injected instruction and a compromised model that obeys it. The backend rejects the unsafe proposal, the model rewrites, and only the safe message reaches approval. `scripts/create_redteam_invoice.py` creates the same scenario as a Sandbox draft for a live demo.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    U[You] --> UI["React app<br/>Dashboard · Assistant · Autopilot<br/>Clients · Approvals · Safety"]
-    UI -->|/api| API[FastAPI backend]
-    API --> AG["AI agent<br/>bounded tool loop"]
-    AG <-->|OpenAI-compatible API| LLM[("Google Gemini<br/>+ fallback model")]
-    AG --> T["Allowlisted tools<br/>read + propose only"]
-    T --> AN["Deterministic analysis<br/>states · priority · risk · forecast"]
-    API --> AP["Autopilot playbook"]
-    AP --> AN
-    API --> MG["Message safety check"]
-    API --> AE["Approval engine<br/>hash-bound · execute once · verify"]
-    AN -->|read| PP[("PayPal Invoicing API v2<br/>Sandbox")]
-    AE -->|write + verify| PP
-    API --> DB[("SQLite<br/>proposals · audit trail")]
-```
+![CollectIQ architecture](docs/images/architecture.png)
 
-**Lifecycle of one action:**
+**Lifecycle of one action** (the same gate for the AI Assistant, Autopilot and MCP clients):
+
+![Approval gate](docs/images/approval.png)
 
 ```mermaid
 sequenceDiagram
-    participant AI as AI agent / Autopilot
+    participant AI as AI agent / Autopilot / MCP client
     participant B as CollectIQ backend
     participant H as You
     participant P as PayPal Sandbox
@@ -153,7 +175,11 @@ sequenceDiagram
     B-->>H: Done, verified in PayPal (every step audited)
 ```
 
-More detail: [PAYPAL_INTEGRATION.md](docs/architecture/PAYPAL_INTEGRATION.md) · [APPROVAL_ENGINE.md](docs/architecture/APPROVAL_ENGINE.md) · [DATA_MODEL.md](docs/architecture/DATA_MODEL.md)
+**When the client pays:**
+
+![PayPal webhook flow](docs/images/webhook.png)
+
+More detail: [PAYPAL_INTEGRATION.md](docs/architecture/PAYPAL_INTEGRATION.md) · [APPROVAL_ENGINE.md](docs/architecture/APPROVAL_ENGINE.md) · [DATA_MODEL.md](docs/architecture/DATA_MODEL.md) · [AGENT_DESIGN.md](docs/architecture/AGENT_DESIGN.md) · [MCP.md](docs/MCP.md)
 
 **Tech stack**
 
@@ -161,9 +187,11 @@ More detail: [PAYPAL_INTEGRATION.md](docs/architecture/PAYPAL_INTEGRATION.md) ·
 |---|---|
 | Frontend | React 19, TypeScript, Vite 8, Tailwind CSS v4, TanStack Query 5, React Router 7, AG Grid Community, lucide-react |
 | Backend | Python 3.13, FastAPI, Pydantic v2, httpx (async), SQLAlchemy 2 (async) |
-| Database | SQLite (proposals and audit trail; invoices stay in PayPal) |
-| Payments | PayPal Invoicing REST API v2 (Sandbox) |
+| Database | SQLite (proposals, audit trail, webhook events; invoices stay in PayPal) |
+| Payments | PayPal Invoicing REST API v2 + Webhooks (Sandbox) |
 | AI | Google Gemini via the OpenAI Python SDK (OpenAI-compatible endpoint) |
+| Agent interoperability | MCP Python SDK (FastMCP, Streamable HTTP) |
+| QR codes | segno (SVG) |
 | Hosting | Render (Docker, free web service) |
 
 ## Try the live demo
@@ -174,9 +202,11 @@ More detail: [PAYPAL_INTEGRATION.md](docs/architecture/PAYPAL_INTEGRATION.md) ·
 2. **Clients:** payment behaviour per client; click "Ask the agent about this client".
 3. **AI Assistant:** try "Which clients usually pay late, and how much can I expect in the next 30 days?" and open the tool trace.
 4. **Autopilot:** click **Run now** and review the proposals (tone, client risk, reason). Approve and execute one if you like: it sends a real Sandbox reminder and verifies it.
-5. **Safety:** read the live evidence and paste a suspicious message into **Try it**.
+5. **Payment link & QR:** on an approved reminder, open **Payment link** to see the QR code, copy the message, or open PayPal's payment page.
+6. **Real-time payment:** when a Sandbox invoice is paid, PayPal calls the webhook and a **"Payment received"** notification appears within seconds; the payment is visible in the Activity Log.
+7. **Safety:** read the live evidence and paste a suspicious message into **Try it**.
 
-Notes on the free hosting: the first request after 15 idle minutes can take 30 to 60 seconds (the instance wakes up). The SQLite database is reset when the service restarts, so the Activity Log starts empty; invoice data is unaffected because it lives in PayPal. AI requests are limited per visitor per hour to protect the free AI quota.
+Notes on the free hosting: the first request after 15 idle minutes can take 30 to 60 seconds (the instance wakes up). The SQLite database is reset when the service restarts, so the Activity Log starts empty; invoice data is unaffected because it lives in PayPal. AI requests are limited per visitor per hour to protect the free AI quota. The live MCP endpoint needs the owner's token; to try MCP yourself, run CollectIQ locally with your own `MCP_API_TOKEN` (see below).
 
 ## Run it locally
 
@@ -246,6 +276,30 @@ python scripts/create_demo_draft.py --execute       # 1 fresh draft to demo "sen
 python scripts/create_redteam_invoice.py --execute  # 1 draft with a prompt-injection attempt in the client name
 ```
 
+### 6. PayPal webhooks (optional)
+
+PayPal must be able to reach your server, so use your deployed URL (or a tunnel to `localhost:8000`).
+
+1. PayPal Developer Dashboard → **Apps & Credentials → your Sandbox app → Webhooks → Add Webhook**.
+2. URL: `https://<your-host>/api/webhooks/paypal`. Events: **Invoicing invoice paid** (and optionally **Invoicing invoice cancelled**).
+3. Copy the **Webhook ID** into `PAYPAL_WEBHOOK_ID` and restart the backend.
+4. Simulate a client paying an open invoice in full (Sandbox write, dry run by default):
+
+```bash
+cd backend
+python scripts/simulate_client_payment.py --invoice <INVOICE_ID or invoice number> --execute
+```
+
+PayPal then sends `INVOICING.INVOICE.PAID`, and the app shows **"Payment received"**. Webhook events sent from PayPal's simulator are not signed for a real app and are rejected by design.
+
+### 7. MCP server (optional)
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"   # put the result in MCP_API_TOKEN in backend/.env
+```
+
+Restart the backend and connect a client to `http://localhost:8000/mcp/` with the header `Authorization: Bearer <token>`. Step-by-step setup for Claude Desktop, Claude Code and MCP Inspector: [docs/MCP.md](docs/MCP.md).
+
 ### Run with Docker (production build)
 
 ```bash
@@ -253,7 +307,7 @@ docker build -t collectiq-ai .
 docker run --rm -p 8000:8000 --env-file backend/.env collectiq-ai
 ```
 
-Open **http://localhost:8000**: the backend serves the built React app and the API from one origin.
+Open **http://localhost:8000**: the backend serves the built React app, the API and the MCP endpoint from one origin.
 
 ### Configuration reference
 
@@ -261,6 +315,8 @@ Open **http://localhost:8000**: the backend serves the built React app and the A
 |---|---|---|
 | `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | none | PayPal Sandbox REST app credentials |
 | `PAYPAL_SANDBOX_INVOICER_EMAIL` | none | Sandbox business email used by seed scripts |
+| `PAYPAL_WEBHOOK_ID` | none | Webhook ID used to verify PayPal webhook signatures (empty = webhook endpoint disabled) |
+| `MCP_API_TOKEN` | none | Bearer token for the MCP server at `/mcp/` (empty = MCP disabled) |
 | `LLM_BASE_URL` | Gemini OpenAI-compatible URL | Any OpenAI-compatible provider |
 | `LLM_MODEL` | `gemini-3.6-flash` | Primary model |
 | `LLM_FALLBACK_MODEL` | none | Retried once on rate limits or provider errors |
@@ -275,7 +331,7 @@ Open **http://localhost:8000**: the backend serves the built React app and the A
 
 ### Deploy to Render
 
-The repository includes a `Dockerfile` and a `render.yaml` blueprint. Create a **Web Service** from this repository with the **Docker** runtime, health check path `/api/health`, and set the variables above in the Render dashboard (secrets are never committed).
+The repository includes a `Dockerfile` and a `render.yaml` blueprint. Create a **Web Service** from this repository with the **Docker** runtime, health check path `/api/health`, and set the variables above in the Render dashboard (secrets are never committed). Then point the PayPal webhook to `https://<your-service>.onrender.com/api/webhooks/paypal`.
 
 ## Tests
 
@@ -285,7 +341,7 @@ source .venv/bin/activate
 python -m pytest -q
 ```
 
-**111 tests**, all offline: PayPal is replaced by stateful `httpx.MockTransport` fakes and the LLM by scripted fakes, with a temporary database per test. They cover the PayPal client and OAuth, invoice analysis, the agent loop and tool guardrails, the approval engine (hash binding, expiry, execute-once, outcome unknown, verification), edits and AI rewrites, the autopilot policy, client insights and forecast, the message safety check, prompt injection, rate limiting and production frontend serving.
+**127 tests**, all offline: PayPal is replaced by stateful `httpx.MockTransport` fakes and the LLM by scripted fakes, with a temporary database per test. They cover the PayPal client and OAuth, invoice analysis, the agent loop and tool guardrails, the approval engine (hash binding, expiry, execute-once, outcome unknown, verification), edits and AI rewrites, the autopilot policy, client insights and forecast, the message safety check, prompt injection, rate limiting, production frontend serving, **webhooks** (signature rejection, duplicates, payment recording, withdrawing pending actions), **payment links** (URL validation, non-collectible invoices) and the **MCP server** (bearer auth, proposals wait for approval, guardrails cannot be bypassed, no execute tool).
 
 Frontend checks:
 
@@ -297,18 +353,21 @@ npm run build    # TypeScript + Vite production build
 
 ## API overview and Postman
 
-19 endpoints under `/api`, documented live at **[/docs](https://collectiq-ai-dlxu.onrender.com/docs)**.
+21 endpoints under `/api`, documented live at **[/docs](https://collectiq-ai-dlxu.onrender.com/docs)**, plus the MCP endpoint at `/mcp/`.
 
 | Area | Endpoints |
 |---|---|
 | Health and PayPal | `GET /health` · `GET /integrations/paypal/status` |
 | Invoices | `GET /invoices` · `GET /invoices/analysis` |
+| Payment links 🆕 | `GET /invoices/{id}/payment-link` |
 | AI agent | `POST /agent/runs` |
 | Actions | `GET /actions` · `GET /actions/{id}` · `POST /actions/{id}/approve` · `/reject` · `/revise` · `/redraft` · `/execute` |
 | Autopilot | `GET /autopilot/settings` · `PUT /autopilot/settings` · `POST /autopilot/run` |
 | Insights | `GET /insights` |
 | Safety | `GET /safety` · `POST /safety/check-message` |
 | Audit | `GET /audit` |
+| Webhooks 🆕 | `POST /webhooks/paypal` |
+| MCP 🆕 | `/mcp/` (Streamable HTTP, `Authorization: Bearer <MCP_API_TOKEN>`) |
 
 **Postman:** import [`docs/postman/CollectIQ-AI.postman_collection.json`](docs/postman/CollectIQ-AI.postman_collection.json). The `baseUrl` variable points to the live demo. The "List pending actions" request stores the first pending action's ID and parameter hash, so "Approve" and "Execute" work in sequence.
 
@@ -316,13 +375,14 @@ npm run build    # TypeScript + Vite production build
 
 | Tool | How it is used |
 |---|---|
-| **PayPal Invoicing API v2 (Sandbox)** | System of record: reading invoices and payments; sending invoices, reminders and recorded payments (see [How PayPal is used](#how-paypal-is-used)) |
+| **PayPal Invoicing API v2 + Webhooks (Sandbox)** | System of record: reading invoices and payments; sending invoices, reminders and recorded payments; real-time payment webhooks with signature verification; payment page links (see [How PayPal is used](#how-paypal-is-used)) |
 | **Google Gemini** (`gemini-3.6-flash`, fallback `gemini-3.5-flash`) | Agent reasoning with tool calling, explanations in the user's language, client message drafting and rewriting, via the OpenAI-compatible API and the OpenAI Python SDK |
+| **Model Context Protocol** (MCP Python SDK) | Exposes CollectIQ's read and propose tools to other AI agents; tested with **Claude Desktop** through `mcp-remote` |
 | **AG Grid Community** (sponsor) | Invoices table: filtering, sorting, quick search, CSV export, per-row "ask the agent" |
 | **Render** (sponsor) | Hosting of the live demo (Docker web service) |
 | **Postman** (sponsor) | API collection for judges and developers |
-| **Claude (Anthropic)** | Used as a pair-programming assistant during development (design discussion, code and tests). Every change was reviewed, run and tested by the author; see [docs/project/AI_WORK_LOG.md](docs/project/AI_WORK_LOG.md) |
-| FastAPI, Pydantic, SQLAlchemy, httpx, pytest | Backend, validation, persistence, async HTTP, tests |
+| **Claude (Anthropic)** | Used as a pair-programming assistant during development (design discussion, code, tests and diagrams). Every change was reviewed, run and tested by the author; see [docs/project/AI_WORK_LOG.md](docs/project/AI_WORK_LOG.md) |
+| FastAPI, Pydantic, SQLAlchemy, httpx, pytest, segno | Backend, validation, persistence, async HTTP, tests, QR codes |
 | React, TypeScript, Vite, Tailwind CSS, TanStack Query | Frontend |
 
 ## Project structure
@@ -332,16 +392,22 @@ collectiq-ai/
 ├── backend/
 │   ├── app/
 │   │   ├── agent/          # LLM client + fallback, agent loop, tools, prompts, drafting, message guard
-│   │   ├── api/            # FastAPI routes, errors, rate limit, frontend serving
+│   │   ├── api/            # FastAPI routes (incl. webhooks, payment links), errors, rate limit, frontend serving
 │   │   ├── core/           # settings
 │   │   ├── db/             # SQLAlchemy models and session
-│   │   ├── integrations/   # PayPal OAuth, client, invoices adapter, schemas
+│   │   ├── integrations/   # PayPal OAuth, client, invoices adapter, webhook verification, schemas
 │   │   ├── schemas/        # API models
-│   │   └── services/       # analysis, insights, approvals, autopilot, audit, safety
-│   ├── scripts/            # Sandbox checks and seed scripts (dry run by default)
-│   └── tests/              # 111 offline tests
-├── frontend/src/           # React app (pages, components, API hooks)
-├── docs/                   # architecture notes, project log, Postman collection
+│   │   ├── services/       # analysis, insights, approvals, autopilot, audit, safety, webhooks, payment links
+│   │   └── mcp_server.py   # MCP server (read + propose tools, bearer auth)
+│   ├── scripts/            # Sandbox checks, seed and payment-simulation scripts (dry run by default)
+│   └── tests/              # 127 offline tests
+├── frontend/src/           # React app (pages, components, API hooks, payment notifier, QR panel)
+├── docs/
+│   ├── architecture/       # agent, approval engine, data model, PayPal integration
+│   ├── images/             # diagrams used in this README
+│   ├── postman/            # Postman collection
+│   ├── project/            # AI work log, tasks
+│   └── MCP.md              # MCP server setup
 ├── Dockerfile · render.yaml
 └── LICENSE
 ```
@@ -350,18 +416,25 @@ collectiq-ai/
 
 **Current limitations**
 
-- PayPal Sandbox only, single merchant account, no user accounts.
-- SQLite on free hosting is reset on restart (proposals and audit trail); invoice data is unaffected.
+- PayPal Sandbox only, single merchant account, no user accounts; one MCP token per deployment.
+- SQLite on free hosting is reset on restart (proposals, audit trail, webhook history); invoice data is unaffected.
 - Forecasts and risk levels need payment history; new clients are shown as "new".
 - Amounts are not converted between currencies; the forecast uses the main currency.
+- The message safety check blocks every link in AI-written messages, including PayPal's own payment link; clients use the pay button in PayPal's invoice email, or the link the user shares from the payment-link panel.
+
+**Shipped during the hackathon**
+
+- ✅ PayPal webhooks (`INVOICING.INVOICE.PAID`) with signature verification and real-time notifications.
+- ✅ Payment links and QR codes from PayPal's own invoice page.
+- ✅ CollectIQ as an MCP server with the same approval gate, tested with Claude Desktop.
 
 **Roadmap**
 
-- PayPal webhooks (`INVOICING.INVOICE.PAID`) to react to payments in real time.
-- Expose CollectIQ as an MCP server with the same approval gate, so other agents can use it safely.
-- Payment links and QR codes in reminders; email and WhatsApp channels with the same guardrails.
-- Multi-user workspaces with roles, PostgreSQL, and per-workspace policies.
-- Working-capital options for invoices flagged at risk.
+- **SaaS:** multi-user workspaces with roles, PostgreSQL and per-workspace policies; each business connects its own PayPal account through PayPal's partner onboarding.
+- **Subscriptions billed with PayPal** (Subscriptions API) for Free / Pro / Agency plans.
+- Allow only the invoice's own validated PayPal link inside AI-written reminders.
+- Email and WhatsApp delivery channels with the same guardrails and approvals.
+- Working-capital view: flag upcoming cash gaps from the forecast and suggest which invoices to prioritise.
 
 ## License
 
